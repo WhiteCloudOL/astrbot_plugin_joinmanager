@@ -2,7 +2,8 @@ import json
 import toml
 import asyncio
 import matplotlib
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib import font_manager
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -13,10 +14,10 @@ from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
 
-# 设置 matplotlib 后端为 Agg
+# 设置 matplotlib 后端为 Agg 
 matplotlib.use('Agg')
 
-@register("joinmanager", "User", "智能入群管理与统计", "2.3.3")
+@register("joinmanager", "User", "智能入群管理与统计", "2.3.4")
 class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -27,10 +28,12 @@ class JoinManager(Star):
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
         self.chart_temp_path = self.data_dir / "temp_chart.png"
+        
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
             logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
+            
         self.records = self._load_records()
         self.keyword_config = self._load_or_create_toml()
 
@@ -77,18 +80,15 @@ class JoinManager(Star):
             }
         }
 
-        # 如果文件不存在，创建默认文件
         if not self.toml_config_file.exists():
             try:
                 with self.toml_config_file.open('w', encoding='utf-8') as f:
                     toml.dump(default_config, f)
-                logger.info(f"[JoinManager] 已生成默认配置文件: {self.toml_config_file}")
                 return default_config
             except Exception as e:
                 logger.error(f"[JoinManager] 创建 config.toml 失败: {e}")
                 return default_config
 
-        # 如果文件存在，读取
         try:
             with self.toml_config_file.open('r', encoding='utf-8') as f:
                 return toml.load(f)
@@ -123,8 +123,11 @@ class JoinManager(Star):
         else:
             return group_id not in control_list_str
 
-    def _generate_chart(self, group_id: str) -> bool:
-        """生成群成员分类统计饼图 (美化版)"""
+    def _draw_chart_sync(self, group_id: str, save_path: Path) -> bool:
+        """
+        同步绘图函数，将被放入线程池执行。
+        使用 Matplotlib 面向对象 API (Figure/Axes)，避免 pyplot 全局状态冲突。
+        """
         if group_id not in self.records:
             return False
 
@@ -132,19 +135,18 @@ class JoinManager(Star):
         if not group_data:
             return False
 
+        # 数据处理
         category_counts = {}
         for user_data in group_data.values():
             cat = user_data.get("category", "未知")
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-        # 数据排序（从大到小）
         sorted_data = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
         labels = [item[0] for item in sorted_data]
         sizes = [item[1] for item in sorted_data]
         
         font_prop = self._get_font_prop()
 
-        # 莫兰迪/马卡龙色系 (Pastel Colors)
         colors = [
             '#FF9999', '#66B2FF', '#99FF99', '#FFCC99', 
             '#c2c2f0', '#ffb3e6', '#c4e17f', '#76D7C4',
@@ -152,19 +154,21 @@ class JoinManager(Star):
         ]
 
         try:
-            plt.figure(figsize=(8, 6), dpi=120)
+            fig = Figure(figsize=(8, 6), dpi=120)
+            FigureCanvasAgg(fig) 
+            ax = fig.add_subplot(111)
+            
             explode = [0.02] * len(sizes)
-
-            pie_result = plt.pie(
+            pie_result = ax.pie(
                 sizes, 
                 labels=labels, 
                 autopct='%1.1f%%', 
                 startangle=140,
-                colors=colors[:len(sizes)], # 使用自定义颜色
-                explode=explode,           # 分离效果
-                shadow=True,               # 开启阴影
-                pctdistance=0.85,          # 百分比距离圆心的距离
-                textprops={'fontsize': 14} # 基础字号
+                colors=colors[:len(sizes)],
+                explode=explode,
+                shadow=True,
+                pctdistance=0.85,
+                textprops={'fontsize': 14}
             )
             
             texts = pie_result[1]
@@ -178,13 +182,13 @@ class JoinManager(Star):
             for autotext in autotexts: # type: ignore
                 autotext.set_fontproperties(font_prop)
                 autotext.set_color('white')
-                
-                autotext.set_fontweight('bold')  
-                
+                autotext.set_fontweight('bold')
                 autotext.set_fontsize(13)
             
-            plt.axis('equal')
-            plt.title(
+            ax.axis('equal')
+            
+            # 设置标题
+            ax.set_title(
                 f'群 {group_id} 入群来源分布', 
                 fontproperties=font_prop, 
                 fontsize=20,
@@ -192,33 +196,29 @@ class JoinManager(Star):
                 color='#333333'
             )
             
-            plt.tight_layout()
+            fig.tight_layout()
             
-            plt.savefig(str(self.chart_temp_path))
-            plt.close()
+            fig.savefig(str(save_path))
+            
+            # 显式清理
+            fig.clf() 
             return True
+            
         except Exception as e:
             logger.error(f"绘图失败: {e}")
-            plt.close()
             return False
 
+    async def _generate_chart(self, group_id: str) -> bool:
+        """异步包装器：将绘图任务扔给 asyncio 线程池"""
+        # 使用 to_thread 避免阻塞主事件循环
+        return await asyncio.to_thread(self._draw_chart_sync, group_id, self.chart_temp_path)
+
     def get_sid(self, event: AstrMessageEvent) -> str:
-        """从platform,messagetype,groupid反推sid"""
-        platform = event.get_platform_id()
-        gotten_message_type = event.get_message_type()
-        message_type_dic = {
-            MessageType.GROUP_MESSAGE: "GroupMessage",
-            MessageType.FRIEND_MESSAGE: "FriendMessage",
-            MessageType.OTHER_MESSAGE: "OtherMessage"
-        }
-        message_type = message_type_dic.get(gotten_message_type,"OtherMessage")
-        group_id = event.get_group_id()
-        res: str = f"{platform}:{message_type}:{group_id}"
-        return res
+        event.unified_msg_origin
+        return event.unified_msg_origin
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
-        """监听加群请求"""
         if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
             return
         
@@ -239,7 +239,6 @@ class JoinManager(Star):
         if not self._check_permission(group_id):
             return
 
-        # 预处理：转小写
         comment_lower = comment.lower()
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
@@ -247,7 +246,6 @@ class JoinManager(Star):
         matched_reject_kw = None
         
         for kw in reject_keywords:
-            # 均转为小写对比
             if kw.lower() in comment_lower:
                 matched_reject_kw = kw
                 break
@@ -260,12 +258,9 @@ class JoinManager(Star):
                 assert isinstance(event, AiocqhttpMessageEvent)
                 client = event.bot
                 try:
-                    # 调用 API 拒绝，approve=False
                     await client.call_action('set_group_add_request', flag=flag, approve=False, reason="自动拒绝: 命中黑名单关键词")
                     
-                    # 发送群通知
                     target_sid = self.get_sid(event)
-                    # 显式指定类型 List[Comp.BaseMessageComponent]
                     chain: List[Comp.BaseMessageComponent] = [
                         Comp.Plain(f"🚫 已自动拒绝用户 {user_id}\n"+
                                    f"📝 原因: 触发拒绝词【{matched_reject_kw}】")
@@ -274,7 +269,6 @@ class JoinManager(Star):
                     
                 except Exception as e:
                     logger.error(f"[JoinManager] 拒绝操作或发送通知失败: {e}")
-            
             return
 
         # ---------------- 关键词匹配 (自动同意) ----------------
@@ -285,12 +279,9 @@ class JoinManager(Star):
         
         for item in keyword_categories:
             if not isinstance(item, dict): continue
-                
             category_name = item.get("name", "默认")
             keywords = item.get("keywords", [])
-            
             for kw in keywords:
-                # 均转为小写对比
                 if kw.lower() in comment_lower:
                     matched_category = category_name
                     matched_keyword = kw
@@ -298,7 +289,6 @@ class JoinManager(Star):
             if matched_category:
                 break
 
-        # 处理同意请求
         if matched_category:
             logger.info(f"[JoinManager] 匹配成功 -> 分类: {matched_category}")
             
@@ -317,7 +307,6 @@ class JoinManager(Star):
                 return
 
             if approved_success:
-                # 记录数据
                 if group_id not in self.records:
                     self.records[group_id] = {}
                 
@@ -327,9 +316,11 @@ class JoinManager(Star):
                     "category": matched_category
                 }
                 self._save_records()
+                
+                # 异步生成图表，不阻塞事件循环
                 has_chart = False
                 try:
-                    has_chart = self._generate_chart(group_id)
+                    has_chart = await self._generate_chart(group_id)
                 except Exception as e:
                     logger.error(f"生成图表失败: {e}")
 
@@ -342,7 +333,6 @@ class JoinManager(Star):
                          f"📝 理由: {matched_keyword}\n"+
                          f"🏷️ 分类: {matched_category}\n")
                 
-                # 检查图表是否存在
                 if has_chart and self.chart_temp_path.exists():
                     sdmsg += "\n📊 来源分布:"
                     chain: List[Comp.BaseMessageComponent] = [
