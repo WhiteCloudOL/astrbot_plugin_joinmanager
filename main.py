@@ -21,23 +21,16 @@ class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        
-        # 1. 路径配置 (全面迁移至 pathlib)
         self.plugin_dir = Path(__file__).parent.absolute()
         self.toml_config_file = self.plugin_dir / "config.toml" 
         self.assets_dir = self.plugin_dir / "assets"
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
         self.chart_temp_path = self.data_dir / "temp_chart.png"
-        
-        # 2. 目录检查
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            
         if not self.assets_dir.exists():
             logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
-
-        # 3. 数据加载
         self.records = self._load_records()
         self.keyword_config = self._load_or_create_toml()
 

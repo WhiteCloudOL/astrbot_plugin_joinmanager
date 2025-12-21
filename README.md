@@ -1,5 +1,8 @@
 # Astrbot Plugin joinmanager
-## Author: WhiteCloudCN  
+## Author: 清蒸云鸭   
+
+> 灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview
+> 在此基础上作改进
 
 # 安装  
 ### 自动安装
