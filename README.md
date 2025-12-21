@@ -1,6 +1,5 @@
-# Astrbot Plugin MCStatus
-AstrBot Plugin - joinmanager   
-**Author:** WhiteCloudCN  
+# Astrbot Plugin joinmanager
+## Author: WhiteCloudCN  
 
 # 安装  
 ### 自动安装
