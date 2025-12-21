@@ -17,7 +17,6 @@ import astrbot.api.message_components as Comp
 # 设置 matplotlib 后端为 Agg 
 matplotlib.use('Agg')
 
-@register("joinmanager", "User", "智能入群管理与统计", "2.3.4")
 class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
