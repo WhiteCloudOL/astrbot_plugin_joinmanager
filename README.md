@@ -64,7 +64,7 @@ keywords = [ "B站", "b", "up" ]
 ☐ 分群设置欢迎语  
 
 ## 问题反馈
-GithubIssue / QQ群 637174573  
+Github Issue / QQ群 637174573  
 
 ## 支持
 [Astrbot帮助文档](https://astrbot.app)

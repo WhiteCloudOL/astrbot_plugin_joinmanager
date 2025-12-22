@@ -6,13 +6,6 @@
     "default": "cute_font.ttf",
     "obvious_hint": true
   },
-  "welcome": {
-    "description": "欢迎语",
-    "type": "string",
-    "hint": "设置欢迎语，为空则使用默认",
-    "default": "欢迎新成员！通过自动审核",
-    "obvious_hint": true
-  },
   "divide_group": {
     "description": "分群控制",
     "type": "object",
@@ -27,13 +20,34 @@
         "options": ["blacklist", "whitelist"]
       },
       "control_list": {
-        "description": "名单列表",
+        "description": "黑/白名单列表",
         "type": "list",
-        "hint": "在这些群聊里禁用/启用插件，请填写群号(group_id)",
-        "default": [],
-        "items": {
-            "type": "string"
-        }
+        "hint": "在这些群聊里 禁用/启用 插件，填写群号(group_id)",
+        "default": []
+      },
+      "disabled_statistics": {
+        "description": "统计图表禁用群聊",
+        "type": "list",
+        "hint": "设置哪些群聊禁用加群统计功能，填写群号(group_id)",
+        "default": []
+      },
+      "welcome_msg": {
+        "description": "自定义欢迎语",
+        "type": "list",
+        "hint": "自定义每个群聊的欢迎语，格式\"群号:欢迎语\"，default表示其他群聊的默认欢迎语，不可删除",
+        "default": ["default:欢迎新成员！通过自动审核","12345678:欢迎新人加入！"]
+      },
+      "accept_categories": {
+        "description": "同意关键词(分类)",
+        "type": "list",
+        "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
+        "default": ["B站:B站,b,up","抖音:抖,音,"]
+      },
+      "reject": {
+        "description": "拒绝关键词",
+        "type": "list",
+        "hint": "填入关键词，不区分大小写",
+        "default": [ "广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道" ]
       }
     }
   }

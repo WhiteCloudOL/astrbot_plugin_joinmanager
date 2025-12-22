@@ -1,5 +1,4 @@
 import json
-import toml
 import asyncio
 import matplotlib
 from matplotlib.figure import Figure
@@ -21,19 +20,74 @@ class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
+        
+        # 基础路径配置
         self.plugin_dir = Path(__file__).parent.absolute()
-        self.toml_config_file = self.plugin_dir / "config.toml" 
         self.assets_dir = self.plugin_dir / "assets"
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
         self.chart_temp_path = self.data_dir / "temp_chart.png"
+        
+        # 目录检查
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
             logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
             
+        # 数据加载
         self.records = self._load_records()
-        self.keyword_config = self._load_or_create_toml()
+        
+        # 配置加载
+        self.welcome_config = self._load_welcome_msg_config()
+        self.accept_rules = self._load_accept_rules()
+        self.reject_rules = self._load_reject_rules()
+
+    def _load_welcome_msg_config(self) -> dict:
+        """解析设置的欢迎语"""
+        try:
+            welcome_config: list[str] = self.config.get('divide_group', {}).get('welcome_msg', ["default:欢迎新成员！通过自动审核"])
+            welcome_dic = {}
+            for item in welcome_config:
+                group_msg = item.replace('：', ':').split(':', 1)
+                if len(group_msg) == 2:
+                    group_id, msg = group_msg
+                    if group_id and msg:
+                        welcome_dic[group_id.strip()] = msg.strip()
+                else:
+                    logger.warning(f"欢迎语配置格式错误: {item}")
+            
+            if 'default' not in welcome_dic:
+                welcome_dic['default'] = "欢迎新成员！通过自动审核"
+            return welcome_dic
+        except Exception as e:
+            logger.error(f"欢迎语解析错误：{e}")
+            return {"default": "欢迎新成员！通过自动审核"}
+
+    def _load_accept_rules(self) -> Dict[str, List[str]]:
+        """
+        解析同意规则
+        输入格式: ["B站:B站,b,up", "抖音:抖,音"]
+        输出格式: {"B站": ["B站", "b", "up"], "抖音": ["抖", "音"]}
+        """
+        raw_list = self.config.get('divide_group', {}).get('accept_categories', [])
+        rules = {}
+        for item in raw_list:
+            try:
+                item = item.replace('：', ':')
+                if ':' in item:
+                    category, keywords_str = item.split(':', 1)
+                    keywords = [k.strip() for k in keywords_str.replace('，',',').split(',') if k.strip()]
+                    if keywords:
+                        rules[category.strip()] = keywords
+                else:
+                    logger.warning(f"同意规则格式错误 (缺少冒号): {item}")
+            except Exception as e:
+                logger.error(f"解析单条同意规则失败: {item}, 错误: {e}")
+        return rules
+
+    def _load_reject_rules(self) -> List[str]:
+        """解析拒绝规则"""
+        return self.config.get('divide_group', {}).get('reject', [])
 
     def _load_records(self) -> Dict:
         """加载 JSON 统计记录"""
@@ -56,44 +110,6 @@ class JoinManager(Star):
     async def terminate(self):
         self._save_records()
 
-    def _load_or_create_toml(self) -> Dict:
-        """加载或创建 config.toml"""
-        default_config = {
-            "categories": [
-                {
-                    "name": "粉丝",
-                    "keywords": ["直播", "老粉", "关注", "up"]
-                },
-                {
-                    "name": "技术交流",
-                    "keywords": ["代码", "Python", "编程", "学习"]
-                },
-                {
-                    "name": "老友",
-                    "keywords": ["同学", "同事", "亲戚"]
-                }
-            ],
-            "reject": {
-                "keywords": ["广告", "兼职", "代刷"]
-            }
-        }
-
-        if not self.toml_config_file.exists():
-            try:
-                with self.toml_config_file.open('w', encoding='utf-8') as f:
-                    toml.dump(default_config, f)
-                return default_config
-            except Exception as e:
-                logger.error(f"[JoinManager] 创建 config.toml 失败: {e}")
-                return default_config
-
-        try:
-            with self.toml_config_file.open('r', encoding='utf-8') as f:
-                return toml.load(f)
-        except Exception as e:
-            logger.error(f"[JoinManager] 读取 config.toml 失败: {e}")
-            return default_config
-
     def _get_font_prop(self) -> font_manager.FontProperties:
         """获取字体属性"""
         font_name = self.config.get("font", "cute_font.ttf")
@@ -103,7 +119,7 @@ class JoinManager(Star):
             try:
                 return font_manager.FontProperties(fname=str(font_path))
             except Exception as e:
-                logger.error(f"[JoinManager] 自定义字体加载失败: {e}")
+                logger.error(f"自定义字体加载失败: {e}")
         
         default_fonts = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'sans-serif']
         return font_manager.FontProperties(family=default_fonts)
@@ -122,10 +138,7 @@ class JoinManager(Star):
             return group_id not in control_list_str
 
     def _draw_chart_sync(self, group_id: str, save_path: Path) -> bool:
-        """
-        同步绘图函数，将被放入线程池执行。
-        使用 Matplotlib 面向对象 API (Figure/Axes)，避免 pyplot 全局状态冲突。
-        """
+        """同步绘图函数 (在线程池运行)"""
         if group_id not in self.records:
             return False
 
@@ -185,7 +198,6 @@ class JoinManager(Star):
             
             ax.axis('equal')
             
-            # 设置标题
             ax.set_title(
                 f'群 {group_id} 入群来源分布', 
                 fontproperties=font_prop, 
@@ -195,11 +207,9 @@ class JoinManager(Star):
             )
             
             fig.tight_layout()
-            
             fig.savefig(str(save_path))
-            
-            # 显式清理
             fig.clf() 
+            logger.info(f"生成{group_id}图表成功！")
             return True
             
         except Exception as e:
@@ -207,13 +217,15 @@ class JoinManager(Star):
             return False
 
     async def _generate_chart(self, group_id: str) -> bool:
-        """异步包装器：将绘图任务扔给 asyncio 线程池"""
-        # 使用 to_thread 避免阻塞主事件循环
+        """异步包装器"""
         return await asyncio.to_thread(self._draw_chart_sync, group_id, self.chart_temp_path)
 
     def get_sid(self, event: AstrMessageEvent) -> str:
-        event.unified_msg_origin
         return event.unified_msg_origin
+    
+    def get_welcome_msg(self, group_id: str) -> str:
+        default = self.welcome_config.get("default", "欢迎新成员！通过自动审核")
+        return self.welcome_config.get(group_id, default)
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
@@ -240,7 +252,8 @@ class JoinManager(Star):
         comment_lower = comment.lower()
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
-        reject_keywords = self.keyword_config.get("reject", {}).get("keywords", [])
+        # 直接使用解析好的 self.reject_rules
+        reject_keywords = self.reject_rules
         matched_reject_kw = None
         
         for kw in reject_keywords:
@@ -273,12 +286,8 @@ class JoinManager(Star):
         matched_category = None
         matched_keyword = None
         
-        keyword_categories = self.keyword_config.get("categories", [])
-        
-        for item in keyword_categories:
-            if not isinstance(item, dict): continue
-            category_name = item.get("name", "默认")
-            keywords = item.get("keywords", [])
+        # 遍历解析好的规则字典 {"B站": ["B站", "up"], ...}
+        for category_name, keywords in self.accept_rules.items():
             for kw in keywords:
                 if kw.lower() in comment_lower:
                     matched_category = category_name
@@ -315,20 +324,22 @@ class JoinManager(Star):
                 }
                 self._save_records()
                 
-                # 异步生成图表，不阻塞事件循环
                 has_chart = False
-                try:
-                    has_chart = await self._generate_chart(group_id)
-                except Exception as e:
-                    logger.error(f"生成图表失败: {e}")
 
-                default_welcome = "欢迎新成员！通过自动审核"
-                welcome = self.config.get("welcome","")
-                if welcome == "":
-                    welcome = default_welcome
+                # 统计图表启用检查
+                disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
+                disabled_list_str = [str(g) for g in disabled_statisics_group]
+                
+                if group_id not in disabled_list_str: 
+                    try:
+                        has_chart = await self._generate_chart(group_id)
+                    except Exception as e:
+                        logger.error(f"生成图表失败: {e}")
+
+                welcome = self.get_welcome_msg(group_id)
 
                 sdmsg = (f"""🎉 {welcome}\n"""+
-                         f"📝 理由: {comment}\n"+
+                         f"📝 验证消息:\n  {comment}\n"+
                          f"🏷️ 分类: {matched_category}\n")
                 
                 if has_chart and self.chart_temp_path.exists():
