@@ -29,39 +29,41 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 
 3. 完成后重启Astrbot即可载入插件  
 
-## 用法  
+## 配置与用法  
 1. 安装插件  
-2. 在`插件配置` 中配置 `欢迎语`、`黑/白名单`、`名单列表`   
-3. 找到插件目录：`AstrBot/data/plugins/astrbot_plugin_joinmanager`  
-4. 在插件目录下的"config.toml"里配置`categories`,`reject`  
+2. 在`插件配置` 中配置 `欢迎语`、`黑/白名单`、`黑/白名单列表`、`自定义欢迎语`等  
+
+| 配置项 | 格式 | 备注 |
+| :---: | :---: | :---: |
+| `绘图字体` | `xxx.ttf` | 需要放在插件目录的`assets`文件夹下 |
+| `阻止模式` | `blacklist`/`whitelist` | 分别为黑名单，白名单 |
+| `黑/白名单列表` | `群号`,str | (例如`12345678`) |
+| `统计图表禁用群聊` | `群号`,str | 在哪些群聊禁用统计图表 |
+| `自定义欢迎语` | `群号:欢迎语` | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx` |
+| `同意关键词(分类)` | `群号:关键词1,关键词2,关键词3...` | 必须添加冒号，中英文`:`/`：`都可以使用 |
+| 拒绝关键词 | `关键词`,str | 无 |
+
+
 > [!NOTE]  
 > `categories`: 按照**分类**同意加群申请，并统计加群来源，不区分大小写  
 > `reject`: 按照关键词自动**拒绝**申请  
 > 如果两者重复，拒绝的优先级会**大于**同意  
 
-如何添加分类：  
-```toml
-# 新增分类示例，字段需为categories
-[[categories]]
-name = "B站"
-keywords = [ "B站", "b", "up" ]
-```
+
 
 
 ## 数据存储
-1. 网页配置：`_conf_schema.json`
-2. 插件配置：`AstrBot/data/plugins/astrbot_plugin_joinmanager/config.toml`
-3. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`
-4. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`
+1. 网页配置：`_conf_schema.json`  
+2. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`  
+3. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`  
 
-> [!WARNING]  
-> 本插件配置编辑较为复杂，未来可能会对配置作革新  
 
 ## TODO  
 > 画个饼  
 
-☐ 分群单独设置关键词  
-☐ 分群设置欢迎语  
+✅ 分群设置欢迎语  
+☐ 分群单独设置关键词   
+  
 
 ## 问题反馈
 Github Issue / QQ群 637174573  
