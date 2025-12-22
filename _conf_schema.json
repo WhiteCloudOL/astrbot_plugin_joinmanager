@@ -41,7 +41,7 @@
         "description": "同意关键词(分类)",
         "type": "list",
         "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
-        "default": ["B站:B站,b,up","抖音:抖,音,"]
+        "default": ["B站:B站,b,up","抖音:抖,音"]
       },
       "reject": {
         "description": "拒绝关键词",
