@@ -16,28 +16,29 @@ import astrbot.api.message_components as Comp
 # 设置 matplotlib 后端为 Agg 
 matplotlib.use('Agg')
 
+@register("joinmanager", "User", "智能入群管理与统计", "2.3.6")
 class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
         
-        # 基础路径配置
+        # 1. 基础路径配置
         self.plugin_dir = Path(__file__).parent.absolute()
         self.assets_dir = self.plugin_dir / "assets"
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
         self.chart_temp_path = self.data_dir / "temp_chart.png"
         
-        # 目录检查
+        # 2. 目录检查
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
             logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
             
-        # 数据加载
+        # 3. 数据加载
         self.records = self._load_records()
         
-        # 配置加载
+        # 4. 配置加载
         self.welcome_config = self._load_welcome_msg_config()
         self.accept_rules = self._load_accept_rules()
         self.reject_rules = self._load_reject_rules()
@@ -54,21 +55,17 @@ class JoinManager(Star):
                     if group_id and msg:
                         welcome_dic[group_id.strip()] = msg.strip()
                 else:
-                    logger.warning(f"欢迎语配置格式错误: {item}")
+                    logger.warning(f"[JoinManager] 欢迎语配置格式错误: {item}")
             
             if 'default' not in welcome_dic:
                 welcome_dic['default'] = "欢迎新成员！通过自动审核"
             return welcome_dic
         except Exception as e:
-            logger.error(f"欢迎语解析错误：{e}")
+            logger.error(f"[JoinManager] 欢迎语解析错误：{e}")
             return {"default": "欢迎新成员！通过自动审核"}
 
     def _load_accept_rules(self) -> Dict[str, List[str]]:
-        """
-        解析同意规则
-        输入格式: ["B站:B站,b,up", "抖音:抖,音"]
-        输出格式: {"B站": ["B站", "b", "up"], "抖音": ["抖", "音"]}
-        """
+        """解析同意规则"""
         raw_list = self.config.get('divide_group', {}).get('accept_categories', [])
         rules = {}
         for item in raw_list:
@@ -80,9 +77,9 @@ class JoinManager(Star):
                     if keywords:
                         rules[category.strip()] = keywords
                 else:
-                    logger.warning(f"同意规则格式错误 (缺少冒号): {item}")
+                    logger.warning(f"[JoinManager] 同意规则格式错误 (缺少冒号): {item}")
             except Exception as e:
-                logger.error(f"解析单条同意规则失败: {item}, 错误: {e}")
+                logger.error(f"[JoinManager] 解析单条同意规则失败: {item}, 错误: {e}")
         return rules
 
     def _load_reject_rules(self) -> List[str]:
@@ -119,13 +116,13 @@ class JoinManager(Star):
             try:
                 return font_manager.FontProperties(fname=str(font_path))
             except Exception as e:
-                logger.error(f"自定义字体加载失败: {e}")
+                logger.error(f"[JoinManager] 自定义字体加载失败: {e}")
         
         default_fonts = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'sans-serif']
         return font_manager.FontProperties(family=default_fonts)
 
     def _check_permission(self, group_id: str) -> bool:
-        """检查会话权限 (使用 group_id)"""
+        """检查会话权限"""
         divide_group = self.config.get("divide_group", {})
         block_method = divide_group.get("block_method", "blacklist")
         control_list = divide_group.get("control_list", [])
@@ -153,7 +150,10 @@ class JoinManager(Star):
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         sorted_data = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
-        labels = [item[0] for item in sorted_data]
+        
+        # 分类名称\n(5人)
+        labels = [f"{item[0]}\n({item[1]}人)" for item in sorted_data]
+        
         sizes = [item[1] for item in sorted_data]
         
         font_prop = self._get_font_prop()
@@ -189,6 +189,8 @@ class JoinManager(Star):
                 text.set_fontproperties(font_prop)
                 text.set_fontsize(15)
                 text.set_color('#333333')
+                # 标签可能包含多行（因为加入了\n），确保居中对齐
+                text.set_horizontalalignment('center')
 
             for autotext in autotexts: # type: ignore
                 autotext.set_fontproperties(font_prop)
@@ -252,7 +254,6 @@ class JoinManager(Star):
         comment_lower = comment.lower()
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
-        # 直接使用解析好的 self.reject_rules
         reject_keywords = self.reject_rules
         matched_reject_kw = None
         
@@ -286,7 +287,6 @@ class JoinManager(Star):
         matched_category = None
         matched_keyword = None
         
-        # 遍历解析好的规则字典 {"B站": ["B站", "up"], ...}
         for category_name, keywords in self.accept_rules.items():
             for kw in keywords:
                 if kw.lower() in comment_lower:
@@ -325,8 +325,6 @@ class JoinManager(Star):
                 self._save_records()
                 
                 has_chart = False
-
-                # 统计图表启用检查
                 disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
                 disabled_list_str = [str(g) for g in disabled_statisics_group]
                 
