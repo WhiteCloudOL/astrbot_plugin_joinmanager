@@ -54,7 +54,7 @@ keywords = [ "B站", "b", "up" ]
 3. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`
 4. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`
 
-> [!warning] 注意  
+> [!WARNING]  
 > 本插件配置编辑较为复杂，未来可能会对配置作革新  
 
 ## TODO  
