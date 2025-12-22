@@ -27,7 +27,6 @@ class JoinManager(Star):
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
         self.chart_temp_path = self.data_dir / "temp_chart.png"
-        
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
@@ -329,7 +328,7 @@ class JoinManager(Star):
                     welcome = default_welcome
 
                 sdmsg = (f"""🎉 {welcome}\n"""+
-                         f"📝 理由: {matched_keyword}\n"+
+                         f"📝 理由: {comment}\n"+
                          f"🏷️ 分类: {matched_category}\n")
                 
                 if has_chart and self.chart_temp_path.exists():

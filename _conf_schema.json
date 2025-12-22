@@ -19,12 +19,6 @@
     "hint": "分群控制设置",
     "obvious_hint": true,
     "items": {
-      "divide_data": {
-        "description": "启用分群存储（暂未生效）",
-        "type": "bool",
-        "hint": "设置是否启用数据分群存储",
-        "default": false
-      },
       "block_method": {
         "description": "阻止模式",
         "type": "string",
@@ -35,7 +29,7 @@
       "control_list": {
         "description": "名单列表",
         "type": "list",
-        "hint": "设置名单列表，请填写群号(group_id)",
+        "hint": "在这些群聊里禁用/启用插件，请填写群号(group_id)",
         "default": [],
         "items": {
             "type": "string"

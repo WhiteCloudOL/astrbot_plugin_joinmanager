@@ -1,10 +1,10 @@
 # Astrbot Plugin joinmanager
 ## Author: 清蒸云鸭   
 
-> 灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview
-> 在此基础上作改进
+> 插件灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview  
+> 在此基础上作改进  
 
-# 安装  
+## 安装  
 ### 自动安装
 Astrbot插件市场搜索 joinmanager 即可自动下载  
 
@@ -29,7 +29,7 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 
 3. 完成后重启Astrbot即可载入插件  
 
-# 用法  
+## 用法  
 1. 安装插件  
 2. 在`插件配置` 中配置 `欢迎语`、`黑/白名单`、`名单列表`   
 3. 找到插件目录：`AstrBot/data/plugins/astrbot_plugin_joinmanager`  
@@ -48,14 +48,23 @@ keywords = [ "B站", "b", "up" ]
 ```
 
 
-# 数据存储
+## 数据存储
 1. 网页配置：`_conf_schema.json`
 2. 插件配置：`AstrBot/data/plugins/astrbot_plugin_joinmanager/config.toml`
 3. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`
 4. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`
 
-# 问题反馈
+> [!warning] 注意  
+> 本插件配置编辑较为复杂，未来可能会对配置作革新  
+
+## TODO  
+> 画个饼  
+
+☐ 分群单独设置关键词  
+☐ 分群设置欢迎语  
+
+## 问题反馈
 GithubIssue / QQ群 637174573  
 
-# 支持
+## 支持
 [Astrbot帮助文档](https://astrbot.app)

@@ -4,7 +4,7 @@ keywords = [ "B站", "b", "up" ]
 
 [[categories]]
 name = "抖音"
-keywords = [ "抖", "音", "dy", "学习" ]
+keywords = [ "抖", "音", "dy" ]
 
 [[categories]]
 name = "其他"
