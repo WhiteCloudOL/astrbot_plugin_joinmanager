@@ -335,8 +335,8 @@ class JoinManager(Star):
 
                 welcome = self.get_welcome_msg(group_id)
 
-                sdmsg = (f"""🎉 {welcome}\n"""+
-                         f"📝 验证消息:\n  {comment}\n"+
+                sdmsg = (f" 🎉 {welcome}\n"+
+                         f"📝 验证消息:\n{comment}\n"+
                          f"🏷️ 分类: {matched_category}\n")
                 
                 if has_chart and self.chart_temp_path.exists():

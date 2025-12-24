@@ -1,10 +1,16 @@
+<div align="center">
+
+![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
+
 # Astrbot Plugin joinmanager
-## Author: 清蒸云鸭   
+💫加群请求管理器💫  
+
+</div>
 
 > 插件灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview  
 > 在此基础上作改进  
 
-## 安装  
+## 🌍安装  
 ### 自动安装
 Astrbot插件市场搜索 joinmanager 即可自动下载  
 
@@ -29,9 +35,9 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 
 3. 完成后重启Astrbot即可载入插件  
 
-## 配置与用法  
+## ✨配置与用法  
 1. 安装插件  
-2. 在`插件配置` 中配置 `欢迎语`、`黑/白名单`、`黑/白名单列表`、`自定义欢迎语`等  
+2. 在`插件配置` 中配置 `黑/白名单`、`黑/白名单列表`、`自定义欢迎语`等  
 
 | 配置项 | 格式 | 备注 |
 | :---: | :---: | :---: |
@@ -45,28 +51,26 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 
 
 > [!NOTE]  
-> `categories`: 按照**分类**同意加群申请，并统计加群来源，不区分大小写  
-> `reject`: 按照关键词自动**拒绝**申请  
+> `同意关键词(分类)`: 按照**分类**同意加群申请，并统计加群来源，不区分大小写  
+> `拒绝关键词`: 按照关键词自动**拒绝**申请  
 > 如果两者重复，拒绝的优先级会**大于**同意  
 
 
-
-
-## 数据存储
+## 🎈数据存储
 1. 网页配置：`_conf_schema.json`  
 2. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`  
 3. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`  
 
 
-## TODO  
+## 👀TODO  
 > 画个饼  
 
 ✅ 分群设置欢迎语  
 ☐ 分群单独设置关键词   
   
 
-## 问题反馈
+## 🩷问题反馈
 Github Issue / QQ群 637174573  
 
-## 支持
+## ♾️支持
 [Astrbot帮助文档](https://astrbot.app)
