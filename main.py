@@ -54,13 +54,13 @@ class JoinManager(Star):
                     if group_id and msg:
                         welcome_dic[group_id.strip()] = msg.strip()
                 else:
-                    logger.warning(f"[JoinManager] 欢迎语配置格式错误: {item}")
+                    logger.warning(f"[加群统计管理器] 欢迎语配置格式错误: {item}")
             
             if 'default' not in welcome_dic:
                 welcome_dic['default'] = "欢迎新成员！通过自动审核"
             return welcome_dic
         except Exception as e:
-            logger.error(f"[JoinManager] 欢迎语解析错误：{e}")
+            logger.error(f"[加群统计管理器] 欢迎语解析错误：{e}")
             return {"default": "欢迎新成员！通过自动审核"}
 
     def _load_accept_rules(self) -> Dict[str, List[str]]:
@@ -76,9 +76,9 @@ class JoinManager(Star):
                     if keywords:
                         rules[category.strip()] = keywords
                 else:
-                    logger.warning(f"[JoinManager] 同意规则格式错误 (缺少冒号): {item}")
+                    logger.warning(f"[加群统计管理器] 同意规则格式错误 (缺少冒号): {item}")
             except Exception as e:
-                logger.error(f"[JoinManager] 解析单条同意规则失败: {item}, 错误: {e}")
+                logger.error(f"[加群统计管理器] 解析单条同意规则失败: {item}, 错误: {e}")
         return rules
 
     def _load_reject_rules(self) -> List[str]:
@@ -115,7 +115,7 @@ class JoinManager(Star):
             try:
                 return font_manager.FontProperties(fname=str(font_path))
             except Exception as e:
-                logger.error(f"[JoinManager] 自定义字体加载失败: {e}")
+                logger.error(f"[加群统计管理器] 自定义字体加载失败: {e}")
         
         default_fonts = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'sans-serif']
         return font_manager.FontProperties(family=default_fonts)
@@ -245,7 +245,7 @@ class JoinManager(Star):
         comment = raw.get("comment", "")
         flag = raw.get("flag", "")
         
-        logger.info(f"[JoinManager] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
+        logger.info(f"[加群统计管理器] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
 
         if not self._check_permission(group_id):
             return
@@ -279,7 +279,7 @@ class JoinManager(Star):
                     await self.context.send_message(target_sid, MessageChain(chain))
                     
                 except Exception as e:
-                    logger.error(f"[JoinManager] 拒绝操作或发送通知失败: {e}")
+                    logger.error(f"[加群统计管理器] 拒绝操作或发送通知失败: {e}")
             return
 
         # ---------------- 关键词匹配 (自动同意) ----------------
@@ -296,7 +296,7 @@ class JoinManager(Star):
                 break
 
         if matched_category:
-            logger.info(f"[JoinManager] 匹配成功 -> 分类: {matched_category}")
+            logger.info(f"[加群统计管理器] 匹配成功 -> 分类: {matched_category}")
             
             approved_success = False
             if event.get_platform_name() == "aiocqhttp":
@@ -357,5 +357,6 @@ class JoinManager(Star):
                 try:
                     target_sid = self.get_sid(event)
                     await self.context.send_message(target_sid, MessageChain(chain))
+                    logger.info(f"[加群统计管理器] 已完成加群请求，消息发送成功")
                 except Exception as e:
                     logger.error(f"发送消息失败: {e}")
