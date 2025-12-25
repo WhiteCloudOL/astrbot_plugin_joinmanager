@@ -1,20 +1,14 @@
 import json
 import asyncio
-import matplotlib
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib import font_manager
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List
 from pathlib import Path
 from astrbot.core.platform.message_type import MessageType
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
-from astrbot.api.star import Context, Star, register, StarTools
+from astrbot.api.star import Context, Star, StarTools
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
-
-# 设置 matplotlib 后端为 Agg 
-matplotlib.use('Agg')
+from .draw import draw_chart
 
 class JoinManager(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -76,9 +70,9 @@ class JoinManager(Star):
                     if keywords:
                         rules[category.strip()] = keywords
                 else:
-                    logger.warning(f"[加群统计管理器] 同意规则格式错误 (缺少冒号): {item}")
+                    logger.warning(f"[JoinManager] 同意规则格式错误 (缺少冒号): {item}")
             except Exception as e:
-                logger.error(f"[加群统计管理器] 解析单条同意规则失败: {item}, 错误: {e}")
+                logger.error(f"[JoinManager] 解析单条同意规则失败: {item}, 错误: {e}")
         return rules
 
     def _load_reject_rules(self) -> List[str]:
@@ -106,20 +100,6 @@ class JoinManager(Star):
     async def terminate(self):
         self._save_records()
 
-    def _get_font_prop(self) -> font_manager.FontProperties:
-        """获取字体属性"""
-        font_name = self.config.get("font", "cute_font.ttf")
-        font_path = self.assets_dir / font_name
-        
-        if font_path.exists():
-            try:
-                return font_manager.FontProperties(fname=str(font_path))
-            except Exception as e:
-                logger.error(f"[加群统计管理器] 自定义字体加载失败: {e}")
-        
-        default_fonts = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'sans-serif']
-        return font_manager.FontProperties(family=default_fonts)
-
     def _check_permission(self, group_id: str) -> bool:
         """检查会话权限"""
         divide_group = self.config.get("divide_group", {})
@@ -133,93 +113,24 @@ class JoinManager(Star):
         else:
             return group_id not in control_list_str
 
-    def _draw_chart_sync(self, group_id: str, save_path: Path) -> bool:
-        """同步绘图函数 (在线程池运行)"""
+    async def _generate_chart(self, group_id: str) -> bool:
+        """异步绘图包装器"""
         if group_id not in self.records:
             return False
-
+            
         group_data = self.records[group_id]
-        if not group_data:
-            return False
-
-        # 数据处理
-        category_counts = {}
-        for user_data in group_data.values():
-            cat = user_data.get("category", "未知")
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-
-        sorted_data = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+        font_name = self.config.get("font", "cute_font.ttf")
         
-        # 分类名称\n(5人)
-        labels = [f"{item[0]}\n({item[1]}人)" for item in sorted_data]
-        
-        sizes = [item[1] for item in sorted_data]
-        
-        font_prop = self._get_font_prop()
-
-        colors = [
-            '#FF9999', '#66B2FF', '#99FF99', '#FFCC99', 
-            '#c2c2f0', '#ffb3e6', '#c4e17f', '#76D7C4',
-            '#F7DC6F', '#E59866'
-        ]
-
-        try:
-            fig = Figure(figsize=(8, 6), dpi=120)
-            FigureCanvasAgg(fig) 
-            ax = fig.add_subplot(111)
-            
-            explode = [0.02] * len(sizes)
-            pie_result = ax.pie(
-                sizes, 
-                labels=labels, 
-                autopct='%1.1f%%', 
-                startangle=140,
-                colors=colors[:len(sizes)],
-                explode=explode,
-                shadow=True,
-                pctdistance=0.85,
-                textprops={'fontsize': 14}
-            )
-            
-            texts = pie_result[1]
-            autotexts = pie_result[2] if len(pie_result) >= 3 else []
-            
-            for text in texts: 
-                text.set_fontproperties(font_prop)
-                text.set_fontsize(15)
-                text.set_color('#333333')
-                # 标签可能包含多行（因为加入了\n），确保居中对齐
-                text.set_horizontalalignment('center')
-
-            for autotext in autotexts: # type: ignore
-                autotext.set_fontproperties(font_prop)
-                autotext.set_color('white')
-                autotext.set_fontweight('bold')
-                autotext.set_fontsize(13)
-            
-            ax.axis('equal')
-            
-            ax.set_title(
-                f'群 {group_id} 入群来源分布', 
-                fontproperties=font_prop, 
-                fontsize=20,
-                pad=20,
-                color='#333333'
-            )
-            
-            fig.tight_layout()
-            fig.savefig(str(save_path))
-            fig.clf() 
-            logger.info(f"生成{group_id}图表成功！")
-            return True
-            
-        except Exception as e:
-            logger.error(f"绘图失败: {e}")
-            return False
-
-    async def _generate_chart(self, group_id: str) -> bool:
-        """异步包装器"""
-        return await asyncio.to_thread(self._draw_chart_sync, group_id, self.chart_temp_path)
+        bg_img = self.config.get("bg_img", "bg.png")
+        return await asyncio.to_thread(
+            draw_chart, 
+            group_id, 
+            group_data, 
+            self.chart_temp_path, 
+            self.assets_dir, 
+            font_name,
+            bg_img
+        )
 
     def get_sid(self, event: AstrMessageEvent) -> str:
         return event.unified_msg_origin
@@ -230,6 +141,7 @@ class JoinManager(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
+        """监听加群事件并处理"""
         if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
             return
         
@@ -245,7 +157,7 @@ class JoinManager(Star):
         comment = raw.get("comment", "")
         flag = raw.get("flag", "")
         
-        logger.info(f"[加群统计管理器] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
+        logger.info(f"[JoinManager] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
 
         if not self._check_permission(group_id):
             return
@@ -279,7 +191,7 @@ class JoinManager(Star):
                     await self.context.send_message(target_sid, MessageChain(chain))
                     
                 except Exception as e:
-                    logger.error(f"[加群统计管理器] 拒绝操作或发送通知失败: {e}")
+                    logger.error(f"[JoinManager] 拒绝操作或发送通知失败: {e}")
             return
 
         # ---------------- 关键词匹配 (自动同意) ----------------
@@ -296,7 +208,7 @@ class JoinManager(Star):
                 break
 
         if matched_category:
-            logger.info(f"[加群统计管理器] 匹配成功 -> 分类: {matched_category}")
+            logger.info(f"[JoinManager] 匹配成功 -> 分类: {matched_category}")
             
             approved_success = False
             if event.get_platform_name() == "aiocqhttp":
@@ -357,6 +269,6 @@ class JoinManager(Star):
                 try:
                     target_sid = self.get_sid(event)
                     await self.context.send_message(target_sid, MessageChain(chain))
-                    logger.info(f"[加群统计管理器] 已完成加群请求，消息发送成功")
+                    logger.info(f"[JoinManager] 已完成加群请求，消息发送成功")
                 except Exception as e:
                     logger.error(f"发送消息失败: {e}")

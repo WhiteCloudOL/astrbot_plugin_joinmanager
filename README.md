@@ -3,7 +3,7 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器💫  
+💫加群请求管理器v1.2.1💫  
 
 </div>
 
@@ -42,6 +42,7 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 | 配置项 | 格式 | 类型 | 备注 |
 | :---: | :---: | :--: | :---: |
 | `绘图字体` | `xxx.ttf`| str | 需要放在插件目录的`assets`文件夹下 |
+| `背景图` | `bg.jpg` | str | 需要放在插件目录的`assets`文件夹下 |
 | `阻止模式` | `blacklist`/`whitelist` | option | 分别为黑名单，白名单 |
 | `黑/白名单列表` | `群号` |str | (例如`12345678`) |
 | `统计图表禁用群聊` | `群号` | str | 在哪些群聊禁用统计图表 |
