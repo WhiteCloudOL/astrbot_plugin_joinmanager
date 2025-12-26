@@ -216,7 +216,7 @@ def draw_chart(group_id: str, group_data: Dict[str, Any], save_path: Path, asset
         # --- 保存 ---
         fig.savefig(str(save_path)) 
         fig.clf()
-        logger.info(f"生成{group_id}美化版图表成功！")
+        logger.info(f"生成{group_id}图表成功！")
         return True
 
     except Exception as e:

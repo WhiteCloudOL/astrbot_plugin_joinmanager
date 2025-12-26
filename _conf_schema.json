@@ -7,7 +7,7 @@
     "obvious_hint": true
   },
   "bg_img":{
-    "description": "统计背景",
+    "description": "背景图",
     "type": "string",
     "hint": "设置统计图的背景图，请将字体文件放置于插件目录下的 assets 文件夹中",
     "default": "bg.jpg",

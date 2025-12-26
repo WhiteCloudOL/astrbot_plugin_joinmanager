@@ -3,12 +3,16 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.2.1💫  
+💫加群请求管理器v1.2.3💫  
 
 </div>
 
 > 插件灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview  
 > 在此基础上作改进  
+
+# 它能干什么？
+自动审核加群请求，同意申请后根据设定的分类生成精美统计图
+![C8AE6191F09D6E53BDAA319E9D97ED1F.png](https://free.picui.cn/free/2025/12/26/694e165a7651c.png)
 
 ## 🌍安装  
 ### 自动安装
