@@ -13,6 +13,12 @@
     "default": "bg.jpg",
     "obvious_hint": true
   },
+  "delay":{
+    "description": "发送延迟",
+    "type": "float",
+    "hint": "设置发送延迟(s)",
+    "default": 0.5
+  },
   "divide_group": {
     "description": "分群控制",
     "type": "object",
@@ -48,13 +54,25 @@
         "description": "同意关键词(分类)",
         "type": "list",
         "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
-        "default": ["B站:B站,b,up","抖音:抖,音"]
+        "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","Github:github,gh"]
+      },
+      "accept_notice": {
+        "description": "同意消息通知",
+        "type": "list",
+        "hint": "消息通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
       },
       "reject": {
         "description": "拒绝关键词",
         "type": "list",
-        "hint": "填入关键词，不区分大小写",
+        "hint": "填入关键词，不区分大小写（如不需要留空即可）",
         "default": [ "广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道" ]
+      },
+      "reject_notice": {
+        "description": "拒绝消息通知",
+        "type": "list",
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
       }
     }
   }

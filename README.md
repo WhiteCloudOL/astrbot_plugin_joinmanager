@@ -3,16 +3,16 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.2.3💫  
+💫加群请求管理器v1.3.0💫  
 
 </div>
 
 > 插件灵感来源：https://github.com/qiqi55488/astrbot_plugin_appreview  
 > 在此基础上作改进  
 
-# 它能干什么？
-自动审核加群请求，同意申请后根据设定的分类生成精美统计图
-![C8AE6191F09D6E53BDAA319E9D97ED1F.png](https://free.picui.cn/free/2025/12/26/694e165a7651c.png)
+# 它能干什么？  
+自动审核加群请求，同意申请后根据设定的分类生成精美统计图  
+![C8AE6191F09D6E53BDAA319E9D97ED1F.png](https://free.picui.cn/free/2025/12/26/694e165a7651c.png)  
 
 ## 🌍安装  
 ### 自动安装
@@ -47,12 +47,15 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 | :---: | :---: | :--: | :---: |
 | `绘图字体` | `xxx.ttf`| str | 需要放在插件目录的`assets`文件夹下 |
 | `背景图` | `bg.jpg` | str | 需要放在插件目录的`assets`文件夹下 |
+| `发送延迟` | `延迟(s)` | float | 填入浮点数 |
 | `阻止模式` | `blacklist`/`whitelist` | option | 分别为黑名单，白名单 |
 | `黑/白名单列表` | `群号` |str | (例如`12345678`) |
 | `统计图表禁用群聊` | `群号` | str | 在哪些群聊禁用统计图表 |
 | `自定义欢迎语` | `分类名:欢迎语`| list | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx` |
 | `同意关键词(分类)` | `群号:关键词1,关键词2,关键词3...` | list | 必须添加冒号，中英文`:`/`：`都可以使用 |
+| `同意消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
 | `拒绝关键词` | `关键词` | str | 无 |
+| `拒绝消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
 
 
 > [!NOTE]  
@@ -75,7 +78,11 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
   
 
 ## 🩷问题反馈
-Github Issue / QQ群 637174573  
+| 方式 | 联系 |
+| :--: | :--: |
+| Github Issue | [跳转](https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager/issues) | 
+|QQ群 [637174573](https://qm.qq.com/q/3f2bdkDsyW) | ![](https://docs.meowyun.cn/assets/yungroup.Jsn95Q4J.webp) |
+
 
 ## ♾️支持
 [Astrbot帮助文档](https://astrbot.app)

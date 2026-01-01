@@ -1,5 +1,4 @@
-import json
-import asyncio
+import json, asyncio
 from datetime import datetime
 from typing import Dict, List
 from pathlib import Path
@@ -88,6 +87,18 @@ class JoinManager(Star):
             except Exception as e:
                 logger.error(f"加载入群记录失败: {e}")
         return {}
+    
+    def get_notice_session(self, 
+                         event: AstrMessageEvent, 
+                         type: str # reject_notice / accept_notice
+                         ) -> set[str]:
+        """获取需要通知的会话ID"""
+        umo = event.unified_msg_origin
+        sessions = self.config.get("divide_group",{}).get(type,[])
+        filtered_sessions = {item for item in sessions if item != "origin"}
+        if "origin" in sessions:
+            filtered_sessions.add(umo)
+        return filtered_sessions
 
     def _save_records(self):
         """保存 JSON 统计记录"""
@@ -152,6 +163,7 @@ class JoinManager(Star):
         if raw.get("post_type") != "request" or raw.get("request_type") != "group" or raw.get("sub_type") != "add":
             return
 
+        delay = self.config.get("delay",0.5)
         group_id = str(raw.get("group_id", ""))
         user_id = str(raw.get("user_id", ""))
         comment = raw.get("comment", "")
@@ -181,15 +193,20 @@ class JoinManager(Star):
                 assert isinstance(event, AiocqhttpMessageEvent)
                 client = event.bot
                 try:
-                    await client.call_action('set_group_add_request', flag=flag, approve=False, reason="自动拒绝: 命中黑名单关键词")
-                    
-                    target_sid = self.get_sid(event)
-                    chain: List[Comp.BaseMessageComponent] = [
-                        Comp.Plain(f"🚫 已自动拒绝用户 {user_id}\n"+
-                                   f"📝 原因: 触发拒绝词【{matched_reject_kw}】")
-                    ]
-                    await self.context.send_message(target_sid, MessageChain(chain))
-                    
+                    await client.call_action('set_group_add_request', flag=flag, approve=False, reason="拒绝: 命中黑名单关键词")
+                    target_sids = self.get_notice_session(event,"reject_notice")
+                    if target_sids is not None:
+                        # 逐群发送（等待0.5s）
+                        chain: List[Comp.BaseMessageComponent] = [
+                                Comp.Plain(f"🚫 已自动拒绝用户 {user_id}\n"+
+                                        f"📝 原因: 触发拒绝词【{matched_reject_kw}】")]
+                        for target_sid in target_sids:
+                            try:
+                                await self.context.send_message(target_sid, MessageChain(chain))
+                                logger.info(f"[JoinManager] 已拒绝加群请求，消息发送到{target_sid}成功")
+                            except Exception as e:
+                                logger.error(f"发送消息到{target_sid}失败: {e}")
+                            await asyncio.sleep(delay)
                 except Exception as e:
                     logger.error(f"[JoinManager] 拒绝操作或发送通知失败: {e}")
             return
@@ -267,8 +284,15 @@ class JoinManager(Star):
                 await asyncio.sleep(2)
                 
                 try:
-                    target_sid = self.get_sid(event)
-                    await self.context.send_message(target_sid, MessageChain(chain))
-                    logger.info(f"[JoinManager] 已完成加群请求，消息发送成功")
+                    target_sids = self.get_notice_session(event,"accept_notice")
+                    if target_sids is not None:
+                        # 逐群发送
+                        for target_sid in target_sids:
+                            try:
+                                await self.context.send_message(target_sid, MessageChain(chain))
+                                logger.info(f"[JoinManager] 已完成加群请求，消息发送到{target_sid}成功")
+                            except Exception as e:
+                                logger.error(f"发送消息到{target_sid}失败: {e}")
+                            await asyncio.sleep(delay)
                 except Exception as e:
                     logger.error(f"发送消息失败: {e}")
