@@ -54,7 +54,7 @@
         "description": "同意关键词(分类)",
         "type": "list",
         "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
-        "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","Github:github,gh"]
+        "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","GitHub:github,gh"]
       },
       "accept_notice": {
         "description": "同意消息通知",

@@ -142,9 +142,6 @@ class JoinManager(Star):
             font_name,
             bg_img
         )
-
-    def get_sid(self, event: AstrMessageEvent) -> str:
-        return event.unified_msg_origin
     
     def get_welcome_msg(self, group_id: str) -> str:
         default = self.welcome_config.get("default", "欢迎新成员！通过自动审核")
@@ -288,8 +285,23 @@ class JoinManager(Star):
                     if target_sids is not None:
                         # 逐群发送
                         for target_sid in target_sids:
+                            wait_chain = chain.copy()
                             try:
-                                await self.context.send_message(target_sid, MessageChain(chain))
+                                if target_sid != event.unified_msg_origin:
+                                    # 构造非UMO消息通知
+                                    tartget_msg = (f"🎉 群{group_id} 已自动审核通过{user_id}的请求\n"+
+                                                   f"📝 验证消息:\n{comment}\n"+
+                                                   f"🏷️ 分类: {matched_category}\n")
+                                    if has_chart and self.chart_temp_path.exists():
+                                        wait_chain: List[Comp.BaseMessageComponent] = [
+                                            Comp.Plain(tartget_msg),
+                                            Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                                        ]
+                                    else:
+                                        wait_chain: List[Comp.BaseMessageComponent] = [
+                                            Comp.Plain(tartget_msg)
+                                        ]
+                                await self.context.send_message(target_sid, MessageChain(wait_chain))
                                 logger.info(f"[JoinManager] 已完成加群请求，消息发送到{target_sid}成功")
                             except Exception as e:
                                 logger.error(f"发送消息到{target_sid}失败: {e}")

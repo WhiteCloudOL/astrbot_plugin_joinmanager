@@ -3,7 +3,7 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.3.0💫  
+💫加群请求管理器v1.3.1💫  
 
 </div>
 
