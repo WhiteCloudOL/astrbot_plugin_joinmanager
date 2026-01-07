@@ -29,11 +29,12 @@ class JoinManager(Star):
             
         # 3. 数据加载
         self.records = self._load_records()
-        
+
         # 4. 配置加载
         self.welcome_config = self._load_welcome_msg_config()
         self.accept_rules = self._load_accept_rules()
         self.reject_rules = self._load_reject_rules()
+        self.reject_reason = self._load_reject_reason()
 
     def _load_welcome_msg_config(self) -> dict:
         """解析设置的欢迎语"""
@@ -77,6 +78,17 @@ class JoinManager(Star):
     def _load_reject_rules(self) -> List[str]:
         """解析拒绝规则"""
         return self.config.get('divide_group', {}).get('reject', [])
+    
+    def _load_reject_reason(self) -> dict:
+        reject_reason = self.config.get("divide_group",{}).get("reject_reason",[])
+        reasons = {}
+        for item in reject_reason:
+            if ':' in item:
+                parts = item.split(':', 1)
+                key = parts[0]
+                value = parts[1]
+                reasons[key] = value
+        return reasons
 
     def _load_records(self) -> Dict:
         """加载 JSON 统计记录"""
@@ -147,6 +159,28 @@ class JoinManager(Star):
         default = self.welcome_config.get("default", "欢迎新成员！通过自动审核")
         return self.welcome_config.get(group_id, default)
 
+    def get_reject_reason(self, event: AstrMessageEvent, matched_key: str) -> str:
+        group_id = event.get_group_id()
+        user_id = event.get_sender_id()
+        user_name = event.get_sender_name()
+
+        reason = ""
+        if group_id in self.reject_reason:
+            reason = self.reject_reason[group_id]
+        else:
+            reason = self.reject_reason.get("default","触发关键词，自动拒绝")
+        
+        placeholder = {
+            r"%group_id%": group_id,
+            r"%user_id%": user_id,
+            r"%user_name%": user_name,
+            r"%key%": matched_key
+        }
+        for key in placeholder:
+            reason = reason.replace(key,placeholder[key])
+        return reason
+
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
         """监听加群事件并处理"""
@@ -176,7 +210,7 @@ class JoinManager(Star):
         # ---------------- 关键词匹配 (自动拒绝) ----------------
         reject_keywords = self.reject_rules
         matched_reject_kw = None
-        
+
         for kw in reject_keywords:
             if kw.lower() in comment_lower:
                 matched_reject_kw = kw
@@ -184,13 +218,14 @@ class JoinManager(Star):
         
         if matched_reject_kw:
             logger.info(f"[JoinManager] 命中拒绝词: {matched_reject_kw} -> 拒绝用户: {user_id}")
-            
+            # 拒绝理由（自定义）
+            reject_reason = self.get_reject_reason(event,matched_reject_kw)
             if event.get_platform_name() == "aiocqhttp":
                 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
                 assert isinstance(event, AiocqhttpMessageEvent)
                 client = event.bot
                 try:
-                    await client.call_action('set_group_add_request', flag=flag, approve=False, reason="拒绝: 命中黑名单关键词")
+                    await client.call_action('set_group_add_request', flag=flag, approve=False, reason=reject_reason)
                     target_sids = self.get_notice_session(event,"reject_notice")
                     if target_sids is not None:
                         # 逐群发送（等待0.5s）

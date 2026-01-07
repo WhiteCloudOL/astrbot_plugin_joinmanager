@@ -73,6 +73,12 @@
         "type": "list",
         "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
         "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+      },
+      "reject_reason": {
+        "description": "拒绝理由",
+        "type": "list",
+        "hint": "修改自动拒绝时的理由，可使用占位符%placeholder%，具体可见插件文档",
+        "default": [ "default:检测到关键词%key%，拒绝申请" , "12345678:%user_name%,拒绝你的申请！" ]
       }
     }
   }
