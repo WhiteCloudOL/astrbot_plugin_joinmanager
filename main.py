@@ -80,11 +80,11 @@ class JoinManager(Star):
         return self.config.get('divide_group', {}).get('reject', [])
     
     def _load_reject_reason(self) -> dict:
-        reject_reason = self.config.get("divide_group",{}).get("reject_reason",[])
+        reject_reason: list[str] = self.config.get("divide_group",{}).get("reject_reason",[])
         reasons = {}
         for item in reject_reason:
             if ':' in item:
-                parts = item.split(':', 1)
+                parts = item.replace('：',':').split(':', 1)
                 key = parts[0]
                 value = parts[1]
                 reasons[key] = value
