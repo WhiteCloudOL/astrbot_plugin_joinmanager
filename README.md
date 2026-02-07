@@ -3,7 +3,7 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.3.3💫  
+💫加群请求管理器v1.4.0💫  
 
 </div>
 
@@ -58,6 +58,8 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 | `拒绝关键词` | `关键词` | str | 无 |
 | `拒绝消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
 | `拒绝理由` | `群号:理由` | list | 须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx`，可使用占位符，见下表 |
+| `退群消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
+| `自定义退群语` | `群号:退群语` | list | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx` |
 
 
 > [!NOTE]  
@@ -66,12 +68,12 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 > 如果两者重复，拒绝的优先级会**大于**同意  
 
 ### 拒绝理由可用占位符
-| 占位符 | 代表什么？ |
-|--------|--------|
-| `%group_id%` | 群号 |
-| `%user_id%` | 用户ID（QQ号） |
-| `%user_name%` | 用户名（QQ昵称） |
-| `%key%` | 检测到的关键词 |
+| 占位符 | 代表什么？ | 适用于 |
+|--------|--------| -------- |
+| `%group_id%` | 群号 | all |
+| `%user_id%` | 用户ID（QQ号） | all |
+| `%user_name%` | 用户名（QQ昵称） | all |
+| `%key%` | 检测到的关键词 | 拒绝理由 |
 
 
 ## 🎈数据存储
@@ -84,6 +86,7 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 > 画个饼  
 
 ✅ 分群设置欢迎语  
+✅ 退群自动删除无关用户  
 ☐ 分群单独设置关键词   
   
 

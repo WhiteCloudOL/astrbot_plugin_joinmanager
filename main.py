@@ -1,6 +1,6 @@
 import json, asyncio
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 from astrbot.core.platform.message_type import MessageType
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
@@ -31,31 +31,34 @@ class JoinManager(Star):
         self.records = self._load_records()
 
         # 4. 配置加载
-        self.welcome_config = self._load_welcome_msg_config()
+        self.welcome_config = self._parse_msg_config('welcome_msg', r"欢迎新成员！通过自动审核")
+        self.decrease_config = self._parse_msg_config('decrease_msg', r"%user_name% 离开了我们")
+        
         self.accept_rules = self._load_accept_rules()
         self.reject_rules = self._load_reject_rules()
         self.reject_reason = self._load_reject_reason()
 
-    def _load_welcome_msg_config(self) -> dict:
-        """解析设置的欢迎语"""
+    def _parse_msg_config(self, config_key: str, default_text: str) -> Dict[str, str]:
+        """通用的消息配置解析 (格式 group_id:msg)"""
         try:
-            welcome_config: list[str] = self.config.get('divide_group', {}).get('welcome_msg', ["default:欢迎新成员！通过自动审核"])
-            welcome_dic = {}
-            for item in welcome_config:
+            raw_list: list[str] = self.config.get('divide_group', {}).get(config_key, [])
+            result_dic = {}
+            for item in raw_list:
+                # 支持中英文冒号
                 group_msg = item.replace('：', ':').split(':', 1)
                 if len(group_msg) == 2:
                     group_id, msg = group_msg
                     if group_id and msg:
-                        welcome_dic[group_id.strip()] = msg.strip()
+                        result_dic[group_id.strip()] = msg.strip()
                 else:
-                    logger.warning(f"[加群统计管理器] 欢迎语配置格式错误: {item}")
+                    logger.warning(f"[JoinManager] {config_key} 配置格式错误: {item}")
             
-            if 'default' not in welcome_dic:
-                welcome_dic['default'] = "欢迎新成员！通过自动审核"
-            return welcome_dic
+            if 'default' not in result_dic:
+                result_dic['default'] = default_text
+            return result_dic
         except Exception as e:
-            logger.error(f"[加群统计管理器] 欢迎语解析错误：{e}")
-            return {"default": "欢迎新成员！通过自动审核"}
+            logger.error(f"[JoinManager] {config_key} 解析错误：{e}")
+            return {"default": default_text}
 
     def _load_accept_rules(self) -> Dict[str, List[str]]:
         """解析同意规则"""
@@ -102,7 +105,7 @@ class JoinManager(Star):
     
     def get_notice_session(self, 
                          event: AstrMessageEvent, 
-                         type: str # reject_notice / accept_notice
+                         type: str # reject_notice / accept_notice / decrease_notice
                          ) -> set[str]:
         """获取需要通知的会话ID"""
         umo = event.unified_msg_origin
@@ -155,31 +158,80 @@ class JoinManager(Star):
             bg_img
         )
     
+    async def _get_user_nickname(self, event: AstrMessageEvent, user_id: str) -> str:
+        """获取昵称"""
+        from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
+        if not isinstance(event, AiocqhttpMessageEvent):
+            return ""
+            
+        client = event.bot
+        try:
+            if client:
+                resp = await client.call_action('get_stranger_info', user_id=int(user_id), no_cache=True)
+                if resp and isinstance(resp, dict):
+                    nick = resp.get('nick')
+                    if not nick:
+                        nick = resp.get('data', {}).get('nick', '')
+                    return str(nick) if nick else ""
+        except Exception as e:
+            logger.error(f"[JoinManager] 获取用户信息API出错: {e}")
+        return ""
+
+    # ------------------ 占位符处理逻辑 ------------------
+
+    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str, extra: Dict[str, str] = {} ) -> str:
+        """
+        统一的占位符替换方法
+        支持: %group_id%, %user_id%, %user_name%
+        extra: 额外的替换键值对，如 {"%key%": "keyword"}
+        """
+        if not text:
+            return ""
+            
+        mapping = {
+            r"%group_id%": str(group_id),
+            r"%user_id%": str(user_id),
+            r"%user_name%": str(user_name),
+        }
+        
+        if extra:
+            mapping.update(extra)
+            
+        for k, v in mapping.items():
+            text = text.replace(k, str(v))
+        return text
+
     def get_welcome_msg(self, group_id: str) -> str:
-        default = self.welcome_config.get("default", "欢迎新成员！通过自动审核")
+        """获取原始欢迎语模版"""
+        default = self.welcome_config.get("default", r"欢迎新成员！通过自动审核")
         return self.welcome_config.get(group_id, default)
+
+    def get_decrease_msg(self, group_id: str) -> str:
+        """获取原始退群语模版"""
+        default = self.decrease_config.get("default", r"%user_name% 遗憾地离开了我们")
+        return self.decrease_config.get(group_id, default)
 
     def get_reject_reason(self, event: AstrMessageEvent, matched_key: str) -> str:
         group_id = event.get_group_id()
         user_id = event.get_sender_id()
         user_name = event.get_sender_name()
 
-        reason = ""
+        reason_tmpl = ""
         if group_id in self.reject_reason:
-            reason = self.reject_reason[group_id]
+            reason_tmpl = self.reject_reason[group_id]
         else:
-            reason = self.reject_reason.get("default","触发关键词，自动拒绝")
+            reason_tmpl = self.reject_reason.get("default",r"触发关键词，自动拒绝")
         
-        placeholder = {
-            r"%group_id%": group_id,
-            r"%user_id%": user_id,
-            r"%user_name%": user_name,
-            r"%key%": matched_key
-        }
-        for key in placeholder:
-            reason = reason.replace(key,placeholder[key])
-        return reason
+        # 占位符
+        return self._format_placeholder(
+            reason_tmpl, 
+            group_id, 
+            user_id, 
+            user_name, 
+            extra={r"%key%": matched_key}
+        )
 
+    # ------------------ 事件处理 ------------------
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
@@ -199,13 +251,20 @@ class JoinManager(Star):
         user_id = str(raw.get("user_id", ""))
         comment = raw.get("comment", "")
         flag = raw.get("flag", "")
-        
         logger.info(f"[JoinManager] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
 
         if not self._check_permission(group_id):
             return
 
         comment_lower = comment.lower()
+        user_name = user_id
+        
+        # 获取昵称
+        if event.get_platform_name() == "aiocqhttp":
+            fetched_name = await self._get_user_nickname(event, user_id)
+            if fetched_name:
+                user_name = fetched_name
+                logger.info(f"[JoinManager] 成功获取昵称: {user_name} ({user_id})")
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
         reject_keywords = self.reject_rules
@@ -218,7 +277,7 @@ class JoinManager(Star):
         
         if matched_reject_kw:
             logger.info(f"[JoinManager] 命中拒绝词: {matched_reject_kw} -> 拒绝用户: {user_id}")
-            # 拒绝理由（自定义）
+            # 拒绝理由
             reject_reason = self.get_reject_reason(event,matched_reject_kw)
             if event.get_platform_name() == "aiocqhttp":
                 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
@@ -227,15 +286,15 @@ class JoinManager(Star):
                 try:
                     await client.call_action('set_group_add_request', flag=flag, approve=False, reason=reject_reason)
                     target_sids = self.get_notice_session(event,"reject_notice")
+
                     if target_sids is not None:
-                        # 逐群发送（等待0.5s）
+                        # 逐群发送
                         chain: List[Comp.BaseMessageComponent] = [
                                 Comp.Plain(f"🚫 已自动拒绝用户 {user_id}\n"+
                                         f"📝 原因: 触发拒绝词【{matched_reject_kw}】")]
                         for target_sid in target_sids:
                             try:
                                 await self.context.send_message(target_sid, MessageChain(chain))
-                                logger.info(f"[JoinManager] 已拒绝加群请求，消息发送到{target_sid}成功")
                             except Exception as e:
                                 logger.error(f"发送消息到{target_sid}失败: {e}")
                             await asyncio.sleep(delay)
@@ -294,9 +353,17 @@ class JoinManager(Star):
                     except Exception as e:
                         logger.error(f"生成图表失败: {e}")
 
-                welcome = self.get_welcome_msg(group_id)
+                # 欢迎语处理 (支持占位符)
+                welcome_tmpl = self.get_welcome_msg(group_id)
+                welcome_msg = self._format_placeholder(
+                    welcome_tmpl, 
+                    group_id, 
+                    user_id, 
+                    user_name, 
+                    extra={r"%category%": matched_category}
+                )
 
-                sdmsg = (f" 🎉 {welcome}\n"+
+                sdmsg = (f" 🎉 {welcome_msg}\n"+
                          f"📝 验证消息:\n{comment}\n"+
                          f"🏷️ 分类: {matched_category}\n")
                 
@@ -343,3 +410,53 @@ class JoinManager(Star):
                             await asyncio.sleep(delay)
                 except Exception as e:
                     logger.error(f"发送消息失败: {e}")
+
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_group_decrease(self, event: AstrMessageEvent):
+        """监听退群事件，清理统计数据并发送消息"""
+        if event.get_platform_name() != "aiocqhttp":
+            return
+        
+        if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
+            return
+        
+        raw = event.message_obj.raw_message
+        if not isinstance(raw, dict):
+            return
+
+        if raw.get("post_type") == "notice" and raw.get("notice_type") == "group_decrease":
+            group_id = str(raw.get("group_id", ""))
+            user_id = str(raw.get("user_id", ""))
+            
+            # 从数据中移除
+            if group_id in self.records:
+                if user_id in self.records[group_id]:
+                    self.records[group_id].pop(user_id)
+                    logger.info(f"[JoinManager] 用户 {user_id} 退出群 {group_id}，已从统计记录中移除")
+                    self._save_records()
+
+            # 权限检查
+            if not self._check_permission(group_id):
+                return
+
+            user_name = user_id
+            fetched_name = await self._get_user_nickname(event, user_id)
+            if fetched_name:
+                user_name = fetched_name
+
+            decrease_tmpl = self.get_decrease_msg(group_id)
+            if not decrease_tmpl:
+                return
+
+            final_msg = self._format_placeholder(decrease_tmpl, group_id, user_id, user_name)
+            target_sids = self.get_notice_session(event, "decrease_notice")
+            
+            if target_sids:
+                delay = self.config.get("delay", 0.5)
+                for target_sid in target_sids:
+                    try:
+                        await self.context.send_message(target_sid, MessageChain([Comp.Plain(final_msg)]))
+                        logger.info(f"[JoinManager] 已发送退群提示到 {target_sid}")
+                    except Exception as e:
+                        logger.error(f"[JoinManager] 发送退群提示到 {target_sid} 失败: {e}")
+                    await asyncio.sleep(delay)

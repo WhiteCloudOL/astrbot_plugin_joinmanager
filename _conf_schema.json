@@ -45,7 +45,7 @@
         "default": []
       },
       "welcome_msg": {
-        "description": "自定义欢迎语",
+        "description": "欢迎语",
         "type": "list",
         "hint": "自定义每个群聊的欢迎语，格式\"群号:欢迎语\"，default表示其他群聊的默认欢迎语，不可删除",
         "default": ["default:欢迎新成员！通过自动审核","12345678:欢迎新人加入！"]
@@ -79,6 +79,18 @@
         "type": "list",
         "hint": "修改自动拒绝时的理由，可使用占位符%placeholder%，具体可见插件文档",
         "default": [ "default:检测到关键词%key%，拒绝申请" , "12345678:%user_name%,拒绝你的申请！" ]
+      },
+      "decrease_notice": {
+        "description": "退群消息通知",
+        "type": "list",
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+      },
+      "decrease_msg":{
+        "description": "自定义退群语",
+        "type": "list",
+        "hint": "自定义每个群聊的退群语，同欢迎语，支持占位符",
+        "default": ["default:呜呜呜~%user_name%(%user_id%),退出了群聊","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
       }
     }
   }
