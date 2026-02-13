@@ -572,11 +572,20 @@ class JoinManager(Star):
                         logger.error(f"发送消息到{target_sid}失败: {e}")
                     await asyncio.sleep(delay)
 
-    @filter.command("入群统计")
+    @filter.command("入群统计",alias={"加群统计"})
     async def on_statistics_command(self, event: AstrMessageEvent):
         """入群统计命令，生成统计图并发送"""
         user_id = event.get_sender_id()
         group_id = event.get_group_id()
+
+        # 权限检查
+        if not self._check_permission(group_id):
+            return
+        
+        # 非空检查
+        if group_id not in self.records:
+            yield event.plain_result("本群暂无统计数据！")
+            return
 
         # 生成统计图
         has_chart = False
