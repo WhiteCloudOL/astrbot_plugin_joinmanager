@@ -9,7 +9,7 @@
   "bg_img":{
     "description": "背景图",
     "type": "string",
-    "hint": "设置统计图的背景图，请将字体文件放置于插件目录下的 assets 文件夹中",
+    "hint": "设置统计图的背景图，请将背景图文件放置于插件目录下的 assets 文件夹中",
     "default": "bg.jpg",
     "obvious_hint": true
   },
@@ -18,6 +18,18 @@
     "type": "float",
     "hint": "设置发送延迟(s)",
     "default": 0.5
+  },
+  "accept_categories": {
+    "description": "同意关键词(分类)",
+    "type": "list",
+    "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
+    "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","GitHub:github,gh"]
+  },
+  "reject_key": {
+    "description": "拒绝关键词",
+    "type": "list",
+    "hint": "填入关键词，不区分大小写（如不需要留空即可）",
+    "default": [ "广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道" ]
   },
   "divide_group": {
     "description": "分群控制",
@@ -43,30 +55,19 @@
         "type": "list",
         "hint": "设置哪些群聊禁用加群统计功能，填写群号(group_id)",
         "default": []
-      },
-      "welcome_msg": {
-        "description": "欢迎语",
-        "type": "list",
-        "hint": "自定义每个群聊的欢迎语，格式\"群号:欢迎语\"，default表示其他群聊的默认欢迎语，不可删除",
-        "default": ["default:欢迎新成员！通过自动审核","12345678:欢迎新人加入！"]
-      },
-      "accept_categories": {
-        "description": "同意关键词(分类)",
-        "type": "list",
-        "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
-        "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","GitHub:github,gh"]
-      },
+      }
+    }
+  },
+  "notice": {
+    "description": "通知项",
+    "type": "object",
+    "hint": "通知项，每个列表元素均为为SID，其中origin表示消息源群聊",
+    "items": {
       "accept_notice": {
         "description": "同意消息通知",
         "type": "list",
         "hint": "消息通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
         "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
-      },
-      "reject": {
-        "description": "拒绝关键词",
-        "type": "list",
-        "hint": "填入关键词，不区分大小写（如不需要留空即可）",
-        "default": [ "广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道" ]
       },
       "reject_notice": {
         "description": "拒绝消息通知",
@@ -74,23 +75,48 @@
         "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
         "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
       },
-      "reject_reason": {
-        "description": "拒绝理由",
+      "increase_notice": {
+        "description": "手动同意消息通知",
         "type": "list",
-        "hint": "修改自动拒绝时的理由，可使用占位符%placeholder%，具体可见插件文档",
-        "default": [ "default:检测到关键词%key%，拒绝申请" , "12345678:%user_name%,拒绝你的申请！" ]
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
       },
       "decrease_notice": {
         "description": "退群消息通知",
         "type": "list",
         "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
         "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+      }
+    }
+  },
+  "msg": {
+    "description": "消息项",
+    "type": "object",
+    "hint": "消息项均支持占位符",
+    "items": {
+      "welcome_msg": {
+        "description": "欢迎语",
+        "type": "list",
+        "hint": "自定义每个群聊的欢迎语，支持占位符，格式\"群号:欢迎语\"，default表示其他群聊的默认欢迎语，不可删除",
+        "default": ["default:欢迎新成员！通过自动审核","12345678:欢迎新人加入！"]
+      },
+      "reject_reason": {
+        "description": "拒绝理由",
+        "type": "list",
+        "hint": "修改自动拒绝时的理由，支持占位符，具体可见插件文档",
+        "default": [ "default:检测到关键词%key%，拒绝申请" , "12345678:%user_name%,拒绝你的申请！" ]
       },
       "decrease_msg":{
         "description": "自定义退群语",
         "type": "list",
-        "hint": "自定义每个群聊的退群语，同欢迎语，支持占位符",
-        "default": ["default:呜呜呜~%user_name%(%user_id%),退出了群聊","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
+        "hint": "自定义每个群聊的退群语，同欢迎语，支持占位符，具体可见插件文档",
+        "default": ["default:呜呜呜~ %user_name%(%user_id%)退出了群聊","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
+      },
+      "increase_msg":{
+        "description": "自定义手动入群消息",
+        "type": "list",
+        "hint": "自定义每个群聊的手动同意入群者的欢迎消息，同欢迎语，支持占位符",
+        "default": ["default:恭喜你通过人工审核，欢迎入群~","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
       }
     }
   }

@@ -33,6 +33,7 @@ class JoinManager(Star):
         # 4. 配置加载
         self.welcome_config = self._parse_msg_config('welcome_msg', r"欢迎新成员！通过自动审核")
         self.decrease_config = self._parse_msg_config('decrease_msg', r"%user_name% 离开了我们")
+        self.increase_config = self._parse_msg_config('increase_msg',r"恭喜你通过人工审核，欢迎入群~")
         
         self.accept_rules = self._load_accept_rules()
         self.reject_rules = self._load_reject_rules()
@@ -41,7 +42,7 @@ class JoinManager(Star):
     def _parse_msg_config(self, config_key: str, default_text: str) -> Dict[str, str]:
         """通用的消息配置解析 (格式 group_id:msg)"""
         try:
-            raw_list: list[str] = self.config.get('divide_group', {}).get(config_key, [])
+            raw_list: list[str] = self.config.get('msg', {}).get(config_key, [])
             result_dic = {}
             for item in raw_list:
                 # 支持中英文冒号
@@ -62,7 +63,7 @@ class JoinManager(Star):
 
     def _load_accept_rules(self) -> Dict[str, List[str]]:
         """解析同意规则"""
-        raw_list = self.config.get('divide_group', {}).get('accept_categories', [])
+        raw_list = self.config.get('accept_categories', [])
         rules = {}
         for item in raw_list:
             try:
@@ -80,10 +81,10 @@ class JoinManager(Star):
 
     def _load_reject_rules(self) -> List[str]:
         """解析拒绝规则"""
-        return self.config.get('divide_group', {}).get('reject', [])
+        return self.config.get('reject_key', [])
     
     def _load_reject_reason(self) -> dict:
-        reject_reason: list[str] = self.config.get("divide_group",{}).get("reject_reason",[])
+        reject_reason: list[str] = self.config.get("msg",{}).get("reject_reason",[])
         reasons = {}
         for item in reject_reason:
             if ':' in item:
@@ -105,11 +106,11 @@ class JoinManager(Star):
     
     def get_notice_session(self, 
                          event: AstrMessageEvent, 
-                         type: str # reject_notice / accept_notice / decrease_notice
+                         type: str # reject_notice / accept_notice / decrease_notice / increase_notice
                          ) -> set[str]:
         """获取需要通知的会话ID"""
         umo = event.unified_msg_origin
-        sessions = self.config.get("divide_group",{}).get(type,[])
+        sessions = self.config.get("notice",{}).get(type,[])
         filtered_sessions = {item for item in sessions if item != "origin"}
         if "origin" in sessions:
             filtered_sessions.add(umo)
@@ -179,7 +180,7 @@ class JoinManager(Star):
 
     # ------------------ 占位符处理逻辑 ------------------
 
-    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str, extra: Dict[str, str] = {} ) -> str:
+    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str = "" , extra: Dict[str, str] = {} ) -> str:
         """
         统一的占位符替换方法
         支持: %group_id%, %user_id%, %user_name%
@@ -210,6 +211,10 @@ class JoinManager(Star):
         """获取原始退群语模版"""
         default = self.decrease_config.get("default", r"%user_name% 遗憾地离开了我们")
         return self.decrease_config.get(group_id, default)
+    
+    def get_increase_msg(self, group_id: str) -> str:
+        default = self.increase_config.get("default", r"恭喜你通过人工审核，欢迎入群~")
+        return self.increase_config.get(group_id, default)
 
     def get_reject_reason(self, event: AstrMessageEvent, matched_key: str) -> str:
         group_id = event.get_group_id()
@@ -360,7 +365,8 @@ class JoinManager(Star):
                     group_id, 
                     user_id, 
                     user_name, 
-                    extra={r"%category%": matched_category}
+                    extra={ r"%category%": matched_category,
+                           r"%comment%": comment }
                 )
 
                 sdmsg = (f" 🎉 {welcome_msg}\n"+
@@ -428,6 +434,11 @@ class JoinManager(Star):
             group_id = str(raw.get("group_id", ""))
             user_id = str(raw.get("user_id", ""))
             
+            # 权限检查
+            if not self._check_permission(group_id):
+                return
+            
+
             # 从数据中移除
             if group_id in self.records:
                 if user_id in self.records[group_id]:
@@ -435,9 +446,6 @@ class JoinManager(Star):
                     logger.info(f"[JoinManager] 用户 {user_id} 退出群 {group_id}，已从统计记录中移除")
                     self._save_records()
 
-            # 权限检查
-            if not self._check_permission(group_id):
-                return
 
             user_name = user_id
             fetched_name = await self._get_user_nickname(event, user_id)
@@ -460,3 +468,124 @@ class JoinManager(Star):
                     except Exception as e:
                         logger.error(f"[JoinManager] 发送退群提示到 {target_sid} 失败: {e}")
                     await asyncio.sleep(delay)
+    
+
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_group_increase(self, event: AstrMessageEvent):
+        """监听入群事件，对于手动同意进群者发送通知"""
+        if event.get_platform_name() != "aiocqhttp":
+            return
+        
+        if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
+            return
+        
+        raw = event.message_obj.raw_message
+        if not isinstance(raw, dict):
+            return
+
+        if raw.get("post_type") == "notice" and raw.get("notice_type") == "group_increase":
+            group_id = str(raw.get("group_id", ""))
+            user_id = str(raw.get("user_id", ""))
+
+            await asyncio.sleep(2)
+            # 权限检查
+            if not self._check_permission(group_id):
+                return
+            
+            if group_id not in self.records:
+                self.records[group_id] = {}
+
+            # 检查是否是自动审核
+            if user_id in self.records[group_id]:
+                return
+            
+            # 加入统计数据（分类: 人工审核）
+            self.records[group_id][user_id] = {
+                "accept_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "accept_reason": f"人工审核",
+                "category": "人工审核"
+            }
+            self._save_records()
+
+            inscrease_tmpl = self.get_increase_msg(group_id)
+            if not inscrease_tmpl:
+                return
+
+            has_chart = False
+            disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
+            disabled_list_str = [str(g) for g in disabled_statisics_group]
+            
+            if group_id not in disabled_list_str: 
+                try:
+                    has_chart = await self._generate_chart(group_id)
+                except Exception as e:
+                    logger.error(f"生成图表失败: {e}")
+
+
+            # 构造欢迎消息
+            user_name = user_id
+            fetched_name = await self._get_user_nickname(event, user_id)
+            if fetched_name:
+                user_name = fetched_name
+
+            welcome_msg = self._format_placeholder(text=inscrease_tmpl, group_id=group_id, user_id=user_id, user_name=user_name)
+            sdmsg = (f" 🎉 {welcome_msg}\n"+
+                    f"🏷️ 分类: 人工审核")
+            if has_chart and self.chart_temp_path.exists():
+                sdmsg += "\n\n📊 来源分布:"
+                chain: List[Comp.BaseMessageComponent] = [
+                    Comp.At(qq=user_id),
+                    Comp.Plain(sdmsg),
+                    Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                ]
+            else:
+                chain: List[Comp.BaseMessageComponent] = [
+                    Comp.At(qq=user_id),
+                    Comp.Plain(sdmsg)
+                ]
+
+
+            target_sids = self.get_notice_session(event, "increase_notice")
+            delay = self.config.get("delay", 0.5)
+            
+            if target_sids is not None:
+                # 逐群发送
+                for target_sid in target_sids:
+                    wait_chain = chain.copy()
+                    try:
+                        if target_sid != event.unified_msg_origin:
+                            # 构造非UMO消息通知
+                            tartget_msg = (f"🎉 群{group_id} 已由管理员审核通过{user_id}的请求\n"+
+                                            f"🏷️ 分类: 人工审核\n")
+                            if has_chart and self.chart_temp_path.exists():
+                                wait_chain: List[Comp.BaseMessageComponent] = [
+                                    Comp.Plain(tartget_msg),
+                                    Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                                ]
+                            else:
+                                wait_chain: List[Comp.BaseMessageComponent] = [
+                                    Comp.Plain(tartget_msg)
+                                ]
+                        await self.context.send_message(target_sid, MessageChain(wait_chain))
+                        logger.info(f"[JoinManager] 检测到手动同意入群，消息发送到{target_sid}成功")
+                    except Exception as e:
+                        logger.error(f"发送消息到{target_sid}失败: {e}")
+                    await asyncio.sleep(delay)
+
+    @filter.command("入群统计")
+    async def on_statistics_command(self, event: AstrMessageEvent):
+        """入群统计命令，生成统计图并发送"""
+        user_id = event.get_sender_id()
+        group_id = event.get_group_id()
+
+        # 生成统计图
+        has_chart = False
+        try:
+            has_chart = await self._generate_chart(group_id)
+        except Exception as e:
+            logger.error(f"生成图表失败: {e}")
+
+        if has_chart:
+            yield event.image_result(str(self.chart_temp_path))
+        else:
+            yield event.plain_result("生成图表出错，请重试！")

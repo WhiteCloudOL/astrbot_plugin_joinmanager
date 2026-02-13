@@ -3,7 +3,9 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.4.0💫  
+💫加群请求管理器v1.5.0💫  
+
+<font color=RED size=4><b>警告：配置文件结构重置，请备份好所有配置再更新！！！</b></font>
 
 </div>
 
@@ -26,20 +28,17 @@ Astrbot插件市场搜索 joinmanager 即可自动下载
 请确保系统已经安装git  
 打开目录`Astrbot/data/plugins/`，在此目录下启动终端执行:  
 ```bash
-# 全球/海外/港澳台
 git clone https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git  
-
-# 大陆地区#1
-git clone https://gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git
-
-# 大陆地区#2
-git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git
 ```
-以上命令任选其一执行即可  
 
 3. 完成后重启Astrbot即可载入插件  
 
-## ✨配置与用法  
+## 🎀 基本命令
+| 命令 | 功能 |
+| :---: | :---: |
+| `/入群统计` | `获取本群的入群统计` |
+
+## ✨ 配置与用法  
 1. 安装插件  
 2. 在`插件配置` 中配置 `黑/白名单`、`黑/白名单列表`、`自定义欢迎语`等  
 
@@ -49,17 +48,13 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 | `绘图字体` | `xxx.ttf`| str | 需要放在插件目录的`assets`文件夹下 |
 | `背景图` | `bg.jpg` | str | 需要放在插件目录的`assets`文件夹下 |
 | `发送延迟` | `延迟(s)` | float | 填入浮点数 |
+| `同意关键词(分类)` | `群号:关键词1,关键词2,关键词3...` | list | 必须添加冒号，中英文`:`/`：`都可以使用 |
+| `拒绝关键词` | `关键词` | str | 无 |
 | `阻止模式` | `blacklist`/`whitelist` | option | 分别为黑名单，白名单 |
 | `黑/白名单列表` | `群号` |str | (例如`12345678`) |
 | `统计图表禁用群聊` | `群号` | str | 在哪些群聊禁用统计图表 |
-| `自定义欢迎语` | `分类名:欢迎语`| list | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx` |
-| `同意关键词(分类)` | `群号:关键词1,关键词2,关键词3...` | list | 必须添加冒号，中英文`:`/`：`都可以使用 |
-| `同意消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
-| `拒绝关键词` | `关键词` | str | 无 |
-| `拒绝消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
-| `拒绝理由` | `群号:理由` | list | 须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx`，可使用占位符，见下表 |
-| `退群消息通知` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
-| `自定义退群语` | `群号:退群语` | list | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx` |
+| `notice会话通知项` | `sid` | list | 发送到消息源填入`origin`项，其他群或私聊填sid（可通过AstrBot命令 /sid 获取） |
+| `msg消息项` | `群号:消息` | list | 必须添加冒号，中英文`:`/`：`都可以使用，默认为`default:xxx`，均支持占位符 |
 
 
 > [!NOTE]  
@@ -67,22 +62,23 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 > `拒绝关键词`: 按照关键词自动**拒绝**申请  
 > 如果两者重复，拒绝的优先级会**大于**同意  
 
-### 拒绝理由可用占位符
+### 占位符列表
 | 占位符 | 代表什么？ | 适用于 |
 |--------|--------| -------- |
 | `%group_id%` | 群号 | all |
 | `%user_id%` | 用户ID（QQ号） | all |
 | `%user_name%` | 用户名（QQ昵称） | all |
 | `%key%` | 检测到的关键词 | 拒绝理由 |
+| `%category%` | 检测到的分类 | 欢迎语 |
+| `%comment%` | 用户加群的验证消息 | 欢迎语 |
 
-
-## 🎈数据存储
+## 🎈 数据存储
 1. 网页配置：`_conf_schema.json`  
 2. 统计数据：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/join_records.json`  
 3. 统计图表：`AstrBot/data/plugin_data/astrbot_plugin_joinmanager/temp_chart.png`  
 
 
-## 👀TODO  
+## 👀 TODO  
 > 画个饼  
 
 ✅ 分群设置欢迎语  
@@ -90,7 +86,7 @@ git clone https://cdn.gh-proxy.com/https://github.com/WhiteCloudOL/astrbot_plugi
 ☐ 分群单独设置关键词   
   
 
-## 🩷问题反馈
+## 🩷 问题反馈
 | 方式 | 联系 |
 | :--: | :--: |
 | Github Issue | [跳转](https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager/issues) | 
