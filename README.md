@@ -3,7 +3,7 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.5.1💫  
+💫加群请求管理器v1.5.2💫  
 
 <font color=RED size=4><b>警告：配置文件结构重置，请备份好所有配置再更新！！！</b></font>
 
@@ -83,7 +83,7 @@ git clone https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git
 
 ✅ 分群设置欢迎语  
 ✅ 退群自动删除无关用户  
-☐ 分群单独设置关键词   
+❌ 分群单独设置关键词   
   
 
 ## 🩷 问题反馈

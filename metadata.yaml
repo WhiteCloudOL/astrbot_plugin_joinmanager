@@ -1,6 +1,9 @@
 name: astrbot_plugin_joinmanager
 display_name: 加群请求管理器
 desc: 处理QQ群加群请求，包含入群统计功能
-version: v1.5.1
+version: v1.5.2
+astrbot_version: ">=4.12.0"
+support_platforms: 
+  - aiocqhttp
 author: 清蒸云鸭
 repo: https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager
