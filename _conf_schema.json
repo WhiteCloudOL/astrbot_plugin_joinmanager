@@ -17,7 +17,7 @@
     "description": "发送延迟",
     "type": "float",
     "hint": "设置发送延迟(s)",
-    "default": 0.5
+    "default": 1
   },
   "accept_categories": {
     "description": "同意关键词(分类)",
@@ -116,7 +116,7 @@
         "description": "自定义手动入群消息",
         "type": "list",
         "hint": "自定义每个群聊的手动同意入群者的欢迎消息，同欢迎语，支持占位符",
-        "default": ["default:恭喜你通过人工审核，欢迎入群~","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
+        "default": ["default:恭喜你通过人工审核，欢迎入群~","12345678:%user_name%(%user_id%),欢迎加入群%group_id%，Ciallo～(∠・ω< )⌒★"]
       }
     }
   }
