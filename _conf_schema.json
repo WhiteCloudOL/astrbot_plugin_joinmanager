@@ -6,30 +6,124 @@
     "default": "cute_font.ttf",
     "obvious_hint": true
   },
-  "bg_img":{
+  "bg_img": {
     "description": "背景图",
     "type": "string",
     "hint": "设置统计图的背景图，请将背景图文件放置于插件目录下的 assets 文件夹中",
     "default": "bg.jpg",
     "obvious_hint": true
   },
-  "delay":{
+  "delay": {
     "description": "发送延迟",
     "type": "float",
     "hint": "设置发送延迟(s)",
     "default": 1
   },
-  "accept_categories": {
-    "description": "同意关键词(分类)",
-    "type": "list",
-    "hint": "按照分类里的关键词同意申请，格式\"分类名:关键词1,关键词2...\"",
-    "default": ["B站:up,哔,哩,小破,站,bi,li,bl","抖音:抖,音,dy,符","GitHub:github,gh"]
+  "chart_cleanup_seconds": {
+    "description": "图表兜底清理时间",
+    "type": "int",
+    "hint": "统计图发送结束后会立即删除；如果发送中断或删除失败，残留图片会在下一次生成图表时按此时间兜底清理，单位秒。",
+    "default": 600
   },
-  "reject_key": {
-    "description": "拒绝关键词",
-    "type": "list",
-    "hint": "填入关键词，不区分大小写（如不需要留空即可）",
-    "default": [ "广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道" ]
+  "accept_rules": {
+    "description": "同意关键词规则",
+    "type": "template_list",
+    "hint": "按群配置自动同意关键词。适用群号填 default 表示默认规则；如果某个群配置了专属同意规则，该群只使用自己的规则，不再继承 default。",
+    "default": [
+      {
+        "__template_key": "accept_rule",
+        "enabled": true,
+        "group_ids": ["default"],
+        "category": "B站",
+        "keywords": ["up", "哔", "哩", "小破", "站", "bi", "li", "bl"]
+      },
+      {
+        "__template_key": "accept_rule",
+        "enabled": true,
+        "group_ids": ["default"],
+        "category": "抖音",
+        "keywords": ["抖", "音", "dy", "符"]
+      },
+      {
+        "__template_key": "accept_rule",
+        "enabled": true,
+        "group_ids": ["default"],
+        "category": "GitHub",
+        "keywords": ["github", "gh"]
+      }
+    ],
+    "templates": {
+      "accept_rule": {
+        "name": "同意规则",
+        "hint": "同一群号下可以添加多条规则，分类用于统计来源。",
+        "display_item": "category",
+        "hide_hint_in_list": true,
+        "items": {
+          "enabled": {
+            "description": "启用",
+            "type": "bool",
+            "default": true
+          },
+          "group_ids": {
+            "description": "适用群号列表",
+            "type": "list",
+            "hint": "填 default 表示默认规则；也可以填写多个具体群号，让同一条规则同时作用于多个群。",
+            "default": ["default"]
+          },
+          "category": {
+            "description": "来源分类",
+            "type": "string",
+            "hint": "匹配成功后写入入群统计，例如 B站、抖音、GitHub。",
+            "default": "新分类"
+          },
+          "keywords": {
+            "description": "同意关键词",
+            "type": "list",
+            "hint": "申请验证消息命中任一关键词即自动同意，不区分大小写。",
+            "default": []
+          }
+        }
+      }
+    }
+  },
+  "reject_rules": {
+    "description": "拒绝关键词规则",
+    "type": "template_list",
+    "hint": "按群配置自动拒绝关键词。适用群号填 default 表示默认规则；如果某个群配置了专属拒绝规则，该群只使用自己的规则，不再继承 default。拒绝优先级高于同意。",
+    "default": [
+      {
+        "__template_key": "reject_rule",
+        "enabled": true,
+        "group_ids": ["default"],
+        "keywords": ["广告", "代练", "加群", "互粉", "卖茶", "朋友推荐", "不知道"]
+      }
+    ],
+    "templates": {
+      "reject_rule": {
+        "name": "拒绝规则",
+        "hint": "同一群号下可以添加多条拒绝规则。",
+        "hide_hint_in_list": true,
+        "items": {
+          "enabled": {
+            "description": "启用",
+            "type": "bool",
+            "default": true
+          },
+          "group_ids": {
+            "description": "适用群号列表",
+            "type": "list",
+            "hint": "填 default 表示默认规则；也可以填写多个具体群号，让同一条规则同时作用于多个群。",
+            "default": ["default"]
+          },
+          "keywords": {
+            "description": "拒绝关键词",
+            "type": "list",
+            "hint": "申请验证消息命中任一关键词即自动拒绝，不区分大小写。",
+            "default": []
+          }
+        }
+      }
+    }
   },
   "divide_group": {
     "description": "分群控制",
@@ -61,62 +155,162 @@
   "notice": {
     "description": "通知项",
     "type": "object",
-    "hint": "通知项，每个列表元素均为为SID，其中origin表示消息源群聊",
+    "hint": "通知项，每个列表元素均为SID，其中 origin 表示消息源群聊",
     "items": {
       "accept_notice": {
         "description": "同意消息通知",
         "type": "list",
-        "hint": "消息通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
-        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+        "hint": "消息通知会话，填SID（使用 /sid 获取），origin 表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": ["origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678"]
       },
       "reject_notice": {
         "description": "拒绝消息通知",
         "type": "list",
-        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
-        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin 表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": ["origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678"]
       },
       "increase_notice": {
         "description": "手动同意消息通知",
         "type": "list",
-        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
-        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin 表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": ["origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678"]
       },
       "decrease_notice": {
         "description": "退群消息通知",
         "type": "list",
-        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin表示消息源群聊，留空不通知（请务必修改默认配置）",
-        "default": [ "origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678" ]
+        "hint": "消息群通知会话，填SID（使用 /sid 获取），origin 表示消息源群聊，留空不通知（请务必修改默认配置）",
+        "default": ["origin", "default:GroupMessage:12345678", "default:FriendMessage:12345678"]
       }
     }
   },
-  "msg": {
-    "description": "消息项",
+  "message_templates": {
+    "description": "消息模板",
     "type": "object",
-    "hint": "消息项均支持占位符",
+    "hint": "消息模板均支持占位符。每个模板列表中，适用群号列表填 default 表示默认模板；也可以填写多个具体群号，让同一条模板同时作用于多个群。",
     "items": {
       "welcome_msg": {
-        "description": "欢迎语",
-        "type": "list",
-        "hint": "自定义每个群聊的欢迎语，支持占位符，格式\"群号:欢迎语\"，default表示其他群聊的默认欢迎语，不可删除",
-        "default": ["default:欢迎新成员！通过自动审核","12345678:欢迎新人加入！"]
+        "description": "自动同意欢迎语",
+        "type": "template_list",
+        "default": [
+          {
+            "__template_key": "message",
+            "group_ids": ["default"],
+            "text": "欢迎新成员！通过自动审核"
+          }
+        ],
+        "templates": {
+          "message": {
+            "name": "欢迎语",
+            "hide_hint_in_list": true,
+            "items": {
+              "group_ids": {
+                "description": "适用群号列表",
+                "type": "list",
+                "hint": "填 default 表示默认模板；也可以填写多个具体群号，让同一条模板同时作用于多个群。",
+                "default": ["default"]
+              },
+              "text": {
+                "description": "消息内容",
+                "type": "text",
+                "hint": "支持 %group_id%、%user_id%、%user_name%、%category%、%comment%。",
+                "default": "欢迎新成员！通过自动审核"
+              }
+            }
+          }
+        }
       },
       "reject_reason": {
-        "description": "拒绝理由",
-        "type": "list",
-        "hint": "修改自动拒绝时的理由，支持占位符，具体可见插件文档",
-        "default": [ "default:检测到关键词%key%，拒绝申请" , "12345678:%user_name%,拒绝你的申请！" ]
+        "description": "自动拒绝理由",
+        "type": "template_list",
+        "default": [
+          {
+            "__template_key": "message",
+            "group_ids": ["default"],
+            "text": "检测到关键词%key%，拒绝申请"
+          }
+        ],
+        "templates": {
+          "message": {
+            "name": "拒绝理由",
+            "hide_hint_in_list": true,
+            "items": {
+              "group_ids": {
+                "description": "适用群号列表",
+                "type": "list",
+                "hint": "填 default 表示默认模板；也可以填写多个具体群号，让同一条模板同时作用于多个群。",
+                "default": ["default"]
+              },
+              "text": {
+                "description": "消息内容",
+                "type": "text",
+                "hint": "支持 %group_id%、%user_id%、%user_name%、%key%。",
+                "default": "检测到关键词%key%，拒绝申请"
+              }
+            }
+          }
+        }
       },
-      "decrease_msg":{
-        "description": "自定义退群语",
-        "type": "list",
-        "hint": "自定义每个群聊的退群语，同欢迎语，支持占位符，具体可见插件文档",
-        "default": ["default:呜呜呜~ %user_name%(%user_id%)退出了群聊","12345678:%user_name%(%user_id%),退出了群%group_id%，究竟是什么原因呢？"]
+      "decrease_msg": {
+        "description": "退群提示",
+        "type": "template_list",
+        "default": [
+          {
+            "__template_key": "message",
+            "group_ids": ["default"],
+            "text": "呜呜呜~ %user_name%(%user_id%)退出了群聊"
+          }
+        ],
+        "templates": {
+          "message": {
+            "name": "退群提示",
+            "hide_hint_in_list": true,
+            "items": {
+              "group_ids": {
+                "description": "适用群号列表",
+                "type": "list",
+                "hint": "填 default 表示默认模板；也可以填写多个具体群号，让同一条模板同时作用于多个群。",
+                "default": ["default"]
+              },
+              "text": {
+                "description": "消息内容",
+                "type": "text",
+                "hint": "支持 %group_id%、%user_id%、%user_name%。",
+                "default": "呜呜呜~ %user_name%(%user_id%)退出了群聊"
+              }
+            }
+          }
+        }
       },
-      "increase_msg":{
-        "description": "自定义手动入群消息",
-        "type": "list",
-        "hint": "自定义每个群聊的手动同意入群者的欢迎消息，同欢迎语，支持占位符",
-        "default": ["default:恭喜你通过人工审核，欢迎入群~","12345678:%user_name%(%user_id%),欢迎加入群%group_id%，Ciallo～(∠・ω< )⌒★"]
+      "increase_msg": {
+        "description": "手动同意欢迎语",
+        "type": "template_list",
+        "default": [
+          {
+            "__template_key": "message",
+            "group_ids": ["default"],
+            "text": "恭喜你通过人工审核，欢迎入群~"
+          }
+        ],
+        "templates": {
+          "message": {
+            "name": "手动同意欢迎语",
+            "hide_hint_in_list": true,
+            "items": {
+              "group_ids": {
+                "description": "适用群号列表",
+                "type": "list",
+                "hint": "填 default 表示默认模板；也可以填写多个具体群号，让同一条模板同时作用于多个群。",
+                "default": ["default"]
+              },
+              "text": {
+                "description": "消息内容",
+                "type": "text",
+                "hint": "支持 %group_id%、%user_id%、%user_name%。",
+                "default": "恭喜你通过人工审核，欢迎入群~"
+              }
+            }
+          }
+        }
       }
     }
   }

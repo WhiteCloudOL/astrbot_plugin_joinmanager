@@ -1,7 +1,10 @@
 import asyncio
 import json
+import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
@@ -9,6 +12,16 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
 from .draw import draw_chart
+
+
+DEFAULT_GROUP_ID = "default"
+
+MESSAGE_DEFAULTS = {
+    "welcome_msg": "欢迎新成员！通过自动审核",
+    "reject_reason": "检测到关键词%key%，拒绝申请",
+    "decrease_msg": "呜呜呜~ %user_name%(%user_id%)退出了群聊",
+    "increase_msg": "恭喜你通过人工审核，欢迎入群~",
+}
 
 
 class JoinManager(Star):
@@ -21,11 +34,14 @@ class JoinManager(Star):
         self.assets_dir = self.plugin_dir / "assets"
         self.data_dir = Path(StarTools.get_data_dir("astrbot_plugin_joinmanager"))
         self.records_file = self.data_dir / "join_records.json"
-        self.chart_temp_path = self.data_dir / "temp_chart.png"
+        self.chart_cache_dir = self.data_dir / "chart_cache"
+        self.active_chart_paths: set[Path] = set()
 
         # 2. 目录检查
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
+        if not self.chart_cache_dir.exists():
+            self.chart_cache_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
             logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
 
@@ -33,68 +49,126 @@ class JoinManager(Star):
         self.records = self._load_records()
 
         # 4. 配置加载
-        self.welcome_config = self._parse_msg_config("welcome_msg", r"欢迎新成员！通过自动审核")
-        self.decrease_config = self._parse_msg_config("decrease_msg", r"%user_name% 离开了我们")
-        self.increase_config = self._parse_msg_config("increase_msg",r"恭喜你通过人工审核，欢迎入群~")
+        self.welcome_config = self._load_message_templates("welcome_msg", MESSAGE_DEFAULTS["welcome_msg"])
+        self.decrease_config = self._load_message_templates("decrease_msg", MESSAGE_DEFAULTS["decrease_msg"])
+        self.increase_config = self._load_message_templates("increase_msg", MESSAGE_DEFAULTS["increase_msg"])
+        self.reject_reason = self._load_message_templates("reject_reason", MESSAGE_DEFAULTS["reject_reason"])
 
-        self.accept_rules = self._load_accept_rules()
-        self.reject_rules = self._load_reject_rules()
-        self.reject_reason = self._load_reject_reason()
+        self.accept_rules, self.accept_rule_groups = self._load_accept_rules()
+        self.reject_rules, self.reject_rule_groups = self._load_reject_rules()
 
-    def _parse_msg_config(self, config_key: str, default_text: str) -> dict[str, str]:
-        """通用的消息配置解析 (格式 group_id:msg)"""
-        try:
-            raw_list: list[str] = self.config.get("msg", {}).get(config_key, [])
-            result_dic = {}
-            for item in raw_list:
-                # 支持中英文冒号
-                group_msg = item.replace("：", ":").split(":", 1)
-                if len(group_msg) == 2:
-                    group_id, msg = group_msg
-                    if group_id and msg:
-                        result_dic[group_id.strip()] = msg.strip()
-                else:
-                    logger.warning(f"[JoinManager] {config_key} 配置格式错误: {item}")
+    @staticmethod
+    def _normalize_group_id(value: Any) -> str:
+        group_id = str(value or "").strip()
+        if not group_id or group_id == "默认" or group_id.lower() in {DEFAULT_GROUP_ID, "*"}:
+            return DEFAULT_GROUP_ID
+        return group_id
 
-            if "default" not in result_dic:
-                result_dic["default"] = default_text
-            return result_dic
-        except Exception as e:
-            logger.error(f"[JoinManager] {config_key} 解析错误：{e}")
-            return {"default": default_text}
+    @staticmethod
+    def _keywords_from_value(value: Any) -> list[str]:
+        if isinstance(value, str):
+            raw_keywords = value.replace("，", ",").split(",")
+        elif isinstance(value, list):
+            raw_keywords = value
+        else:
+            return []
+        return [str(keyword).strip() for keyword in raw_keywords if str(keyword).strip()]
 
-    def _load_accept_rules(self) -> dict[str, list[str]]:
-        """解析同意规则"""
-        raw_list = self.config.get("accept_categories", [])
-        rules = {}
+    def _group_ids_from_rule(self, item: dict[str, Any]) -> list[str]:
+        raw_group_ids = item.get("group_ids")
+        if raw_group_ids is None:
+            raw_group_ids = item.get("group_id", DEFAULT_GROUP_ID)
+
+        if not isinstance(raw_group_ids, list):
+            raw_group_ids = [raw_group_ids]
+
+        group_ids: list[str] = []
+        for raw_group_id in raw_group_ids:
+            group_id = self._normalize_group_id(raw_group_id)
+            if group_id not in group_ids:
+                group_ids.append(group_id)
+
+        return group_ids or [DEFAULT_GROUP_ID]
+
+    def _load_message_templates(self, config_key: str, default_text: str) -> dict[str, str]:
+        raw_list = self.config.get("message_templates", {}).get(config_key, [])
+        result: dict[str, str] = {}
         for item in raw_list:
-            try:
-                item = item.replace("：", ":")
-                if ":" in item:
-                    category, keywords_str = item.split(":", 1)
-                    keywords = [k.strip() for k in keywords_str.replace("，",",").split(",") if k.strip()]
-                    if keywords:
-                        rules[category.strip()] = keywords
-                else:
-                    logger.warning(f"[JoinManager] 同意规则格式错误 (缺少冒号): {item}")
-            except Exception as e:
-                logger.error(f"[JoinManager] 解析单条同意规则失败: {item}, 错误: {e}")
-        return rules
+            if not isinstance(item, dict):
+                continue
 
-    def _load_reject_rules(self) -> list[str]:
-        """解析拒绝规则"""
-        return self.config.get("reject_key", [])
+            group_ids = self._group_ids_from_rule(item)
+            text = str(item.get("text", ""))
+            if text:
+                for group_id in group_ids:
+                    result[group_id] = text
 
-    def _load_reject_reason(self) -> dict:
-        reject_reason: list[str] = self.config.get("msg",{}).get("reject_reason",[])
-        reasons = {}
-        for item in reject_reason:
-            if ":" in item:
-                parts = item.replace("：",":").split(":", 1)
-                key = parts[0]
-                value = parts[1]
-                reasons[key] = value
-        return reasons
+        if DEFAULT_GROUP_ID not in result:
+            result[DEFAULT_GROUP_ID] = default_text
+        return result
+
+    def _load_accept_rules(self) -> tuple[dict[str, dict[str, list[str]]], set[str]]:
+        raw_rules = self.config.get("accept_rules", [])
+        rules: dict[str, dict[str, list[str]]] = {}
+        configured_groups: set[str] = set()
+
+        for item in raw_rules:
+            if not isinstance(item, dict):
+                continue
+
+            group_ids = self._group_ids_from_rule(item)
+            configured_groups.update(group_ids)
+            if not item.get("enabled", True):
+                continue
+
+            category = str(item.get("category", "")).strip()
+            keywords = self._keywords_from_value(item.get("keywords", []))
+            if not category or not keywords:
+                continue
+
+            for group_id in group_ids:
+                category_rules = rules.setdefault(group_id, {})
+                category_keywords = category_rules.setdefault(category, [])
+                for keyword in keywords:
+                    if keyword not in category_keywords:
+                        category_keywords.append(keyword)
+
+        return rules, configured_groups
+
+    def _load_reject_rules(self) -> tuple[dict[str, list[str]], set[str]]:
+        raw_rules = self.config.get("reject_rules", [])
+        rules: dict[str, list[str]] = {}
+        configured_groups: set[str] = set()
+
+        for item in raw_rules:
+            if not isinstance(item, dict):
+                continue
+
+            group_ids = self._group_ids_from_rule(item)
+            configured_groups.update(group_ids)
+            if not item.get("enabled", True):
+                continue
+
+            keywords = self._keywords_from_value(item.get("keywords", []))
+            for group_id in group_ids:
+                group_keywords = rules.setdefault(group_id, [])
+                for keyword in keywords:
+                    if keyword not in group_keywords:
+                        group_keywords.append(keyword)
+
+        return rules, configured_groups
+
+    def get_accept_rules(self, group_id: str) -> dict[str, list[str]]:
+        group_id = self._normalize_group_id(group_id)
+        if group_id in self.accept_rule_groups:
+            return self.accept_rules.get(group_id, {})
+        return self.accept_rules.get(DEFAULT_GROUP_ID, {})
+
+    def get_reject_keywords(self, group_id: str) -> list[str]:
+        group_id = self._normalize_group_id(group_id)
+        if group_id in self.reject_rule_groups:
+            return self.reject_rules.get(group_id, [])
+        return self.reject_rules.get(DEFAULT_GROUP_ID, [])
 
     def _load_records(self) -> dict:
         """加载 JSON 统计记录"""
@@ -142,24 +216,97 @@ class JoinManager(Star):
         else:
             return group_id not in control_list_str
 
-    async def _generate_chart(self, group_id: str) -> bool:
+    def _get_chart_cleanup_seconds(self) -> int:
+        try:
+            seconds = int(self.config.get("chart_cleanup_seconds", 600))
+        except (TypeError, ValueError):
+            seconds = 600
+        return max(seconds, 1)
+
+    def _build_chart_cache_path(self, group_id: str) -> Path:
+        safe_group_id = "".join(char for char in group_id if char.isdigit()) or "unknown"
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        return self.chart_cache_dir / f"joinmanager_{safe_group_id}_{timestamp}_{uuid4().hex[:8]}.png"
+
+    def _cleanup_chart_cache_sync(self, active_paths: set[Path]):
+        cleanup_seconds = self._get_chart_cleanup_seconds()
+        if not self.chart_cache_dir.exists():
+            return
+
+        expires_before = time.time() - cleanup_seconds
+        for chart_path in self.chart_cache_dir.glob("joinmanager_*.png*"):
+            try:
+                if chart_path in active_paths:
+                    continue
+                if chart_path.is_file() and chart_path.stat().st_mtime < expires_before:
+                    if chart_path.suffix == ".deleting":
+                        chart_path.unlink()
+                    else:
+                        deleting_path = chart_path.with_suffix(f"{chart_path.suffix}.deleting")
+                        chart_path.rename(deleting_path)
+                        deleting_path.unlink()
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                logger.warning(f"[JoinManager] 清理图表缓存失败: {chart_path} | {e}")
+
+    async def _cleanup_chart_cache(self):
+        active_paths = set(self.active_chart_paths)
+        await asyncio.to_thread(self._cleanup_chart_cache_sync, active_paths)
+
+    def _release_chart_path(self, chart_path: Path | None):
+        if chart_path:
+            self.active_chart_paths.discard(chart_path)
+
+    def _delete_chart_path_sync(self, chart_path: Path):
+        try:
+            if chart_path.parent != self.chart_cache_dir:
+                return
+            if chart_path.is_file():
+                deleting_path = chart_path.with_suffix(f"{chart_path.suffix}.deleting")
+                chart_path.rename(deleting_path)
+                deleting_path.unlink()
+        except FileNotFoundError:
+            return
+        except Exception as e:
+            logger.warning(f"[JoinManager] 删除图表缓存失败: {chart_path} | {e}")
+
+    async def _dispose_chart_path(self, chart_path: Path | None):
+        if not chart_path:
+            return
+
+        self._release_chart_path(chart_path)
+        await asyncio.to_thread(self._delete_chart_path_sync, chart_path)
+
+    async def _generate_chart(self, group_id: str) -> Path | None:
         """异步绘图包装器"""
         if group_id not in self.records:
-            return False
+            return None
 
-        group_data = self.records[group_id]
+        await self._cleanup_chart_cache()
+
+        group_data = dict(self.records[group_id])
         font_name = self.config.get("font", "cute_font.ttf")
-
         bg_img = self.config.get("bg_img", "bg.png")
-        return await asyncio.to_thread(
-            draw_chart,
-            group_id,
-            group_data,
-            self.chart_temp_path,
-            self.assets_dir,
-            font_name,
-            bg_img
-        )
+        chart_path = self._build_chart_cache_path(group_id)
+        self.active_chart_paths.add(chart_path)
+        try:
+            success = await asyncio.to_thread(
+                draw_chart,
+                group_id,
+                group_data,
+                chart_path,
+                self.assets_dir,
+                font_name,
+                bg_img
+            )
+        except Exception:
+            await self._dispose_chart_path(chart_path)
+            raise
+        if success:
+            return chart_path
+        await self._dispose_chart_path(chart_path)
+        return None
 
     async def _get_user_nickname(self, event: AstrMessageEvent, user_id: str) -> str:
         """获取昵称"""
@@ -184,7 +331,7 @@ class JoinManager(Star):
 
     # ------------------ 占位符处理逻辑 ------------------
 
-    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str = "" , extra: dict[str, str] = {} ) -> str:
+    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str = "" , extra: dict[str, str] | None = None ) -> str:
         """
         统一的占位符替换方法
         支持: %group_id%, %user_id%, %user_name%
@@ -208,28 +355,30 @@ class JoinManager(Star):
 
     def get_welcome_msg(self, group_id: str) -> str:
         """获取原始欢迎语模版"""
-        default = self.welcome_config.get("default", r"欢迎新成员！通过自动审核")
+        group_id = self._normalize_group_id(group_id)
+        default = self.welcome_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["welcome_msg"])
         return self.welcome_config.get(group_id, default)
 
     def get_decrease_msg(self, group_id: str) -> str:
         """获取原始退群语模版"""
-        default = self.decrease_config.get("default", r"%user_name% 遗憾地离开了我们")
+        group_id = self._normalize_group_id(group_id)
+        default = self.decrease_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["decrease_msg"])
         return self.decrease_config.get(group_id, default)
 
     def get_increase_msg(self, group_id: str) -> str:
-        default = self.increase_config.get("default", r"恭喜你通过人工审核，欢迎入群~")
+        group_id = self._normalize_group_id(group_id)
+        default = self.increase_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["increase_msg"])
         return self.increase_config.get(group_id, default)
 
     def get_reject_reason(self, event: AstrMessageEvent, matched_key: str) -> str:
-        group_id = event.get_group_id()
+        group_id = self._normalize_group_id(event.get_group_id())
         user_id = event.get_sender_id()
         user_name = event.get_sender_name()
 
-        reason_tmpl = ""
-        if group_id in self.reject_reason:
-            reason_tmpl = self.reject_reason[group_id]
-        else:
-            reason_tmpl = self.reject_reason.get("default",r"触发关键词，自动拒绝")
+        reason_tmpl = self.reject_reason.get(
+            group_id,
+            self.reject_reason.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["reject_reason"]),
+        )
 
         # 占位符
         return self._format_placeholder(
@@ -276,7 +425,7 @@ class JoinManager(Star):
                 logger.info(f"[JoinManager] 成功获取昵称: {user_name} ({user_id})")
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
-        reject_keywords = self.reject_rules
+        reject_keywords = self.get_reject_keywords(group_id)
         matched_reject_kw = None
 
         for kw in reject_keywords:
@@ -317,7 +466,8 @@ class JoinManager(Star):
         matched_category = None
         matched_keyword = None
 
-        for category_name, keywords in self.accept_rules.items():
+        accept_rules = self.get_accept_rules(group_id)
+        for category_name, keywords in accept_rules.items():
             for kw in keywords:
                 if kw.lower() in comment_lower:
                     matched_category = category_name
@@ -356,13 +506,13 @@ class JoinManager(Star):
                 }
                 self._save_records()
 
-                has_chart = False
+                chart_path = None
                 disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
                 disabled_list_str = [str(g) for g in disabled_statisics_group]
 
                 if group_id not in disabled_list_str:
                     try:
-                        has_chart = await self._generate_chart(group_id)
+                        chart_path = await self._generate_chart(group_id)
                     except Exception as e:
                         logger.error(f"生成图表失败: {e}")
 
@@ -381,12 +531,12 @@ class JoinManager(Star):
                          f"📝 验证消息:\n{comment}\n"+
                          f"🏷️ 分类: {matched_category}\n")
 
-                if has_chart and self.chart_temp_path.exists():
+                if chart_path and chart_path.exists():
                     sdmsg += "\n📊 来源分布:"
                     chain: list[Comp.BaseMessageComponent] = [
                         Comp.At(qq=user_id),
                         Comp.Plain(sdmsg),
-                        Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                        Comp.Image.fromFileSystem(str(chart_path))
                     ]
                 else:
                     chain: list[Comp.BaseMessageComponent] = [
@@ -408,10 +558,10 @@ class JoinManager(Star):
                                     tartget_msg = (f"🎉 群{group_id} 已自动审核通过{user_id}的请求\n"+
                                                    f"📝 验证消息:\n{comment}\n"+
                                                    f"🏷️ 分类: {matched_category}\n")
-                                    if has_chart and self.chart_temp_path.exists():
+                                    if chart_path and chart_path.exists():
                                         wait_chain: list[Comp.BaseMessageComponent] = [
                                             Comp.Plain(tartget_msg),
-                                            Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                                            Comp.Image.fromFileSystem(str(chart_path))
                                         ]
                                     else:
                                         wait_chain: list[Comp.BaseMessageComponent] = [
@@ -424,6 +574,8 @@ class JoinManager(Star):
                             await asyncio.sleep(delay)
                 except Exception as e:
                     logger.error(f"发送消息失败: {e}")
+                finally:
+                    await self._dispose_chart_path(chart_path)
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_decrease(self, event: AstrMessageEvent):
@@ -519,13 +671,13 @@ class JoinManager(Star):
             if not inscrease_tmpl:
                 return
 
-            has_chart = False
+            chart_path = None
             disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
             disabled_list_str = [str(g) for g in disabled_statisics_group]
 
             if group_id not in disabled_list_str:
                 try:
-                    has_chart = await self._generate_chart(group_id)
+                    chart_path = await self._generate_chart(group_id)
                 except Exception as e:
                     logger.error(f"生成图表失败: {e}")
 
@@ -539,12 +691,12 @@ class JoinManager(Star):
             welcome_msg = self._format_placeholder(text=inscrease_tmpl, group_id=group_id, user_id=user_id, user_name=user_name)
             sdmsg = (f" 🎉 {welcome_msg}\n"+
                     "🏷️ 分类: 人工审核")
-            if has_chart and self.chart_temp_path.exists():
+            if chart_path and chart_path.exists():
                 sdmsg += "\n\n📊 来源分布:"
                 chain: list[Comp.BaseMessageComponent] = [
                     Comp.At(qq=user_id),
                     Comp.Plain(sdmsg),
-                    Comp.Image.fromFileSystem(str(self.chart_temp_path))
+                    Comp.Image.fromFileSystem(str(chart_path))
                 ]
             else:
                 chain: list[Comp.BaseMessageComponent] = [
@@ -557,28 +709,33 @@ class JoinManager(Star):
             delay = self.config.get("delay", 0.5)
 
             if target_sids is not None:
-                # 逐群发送
-                for target_sid in target_sids:
-                    wait_chain = chain.copy()
-                    try:
-                        if target_sid != event.unified_msg_origin:
-                            # 构造非UMO消息通知
-                            tartget_msg = (f"🎉 群{group_id} 已由管理员审核通过{user_id}的请求\n"+
-                                            "🏷️ 分类: 人工审核\n")
-                            if has_chart and self.chart_temp_path.exists():
-                                wait_chain: list[Comp.BaseMessageComponent] = [
-                                    Comp.Plain(tartget_msg),
-                                    Comp.Image.fromFileSystem(str(self.chart_temp_path))
-                                ]
-                            else:
-                                wait_chain: list[Comp.BaseMessageComponent] = [
-                                    Comp.Plain(tartget_msg)
-                                ]
-                        await self.context.send_message(target_sid, MessageChain(wait_chain)) #type: ignore
-                        logger.info(f"[JoinManager] 检测到手动同意入群，消息发送到{target_sid}成功")
-                    except Exception as e:
-                        logger.error(f"发送消息到{target_sid}失败: {e}")
-                    await asyncio.sleep(delay)
+                try:
+                    # 逐群发送
+                    for target_sid in target_sids:
+                        wait_chain = chain.copy()
+                        try:
+                            if target_sid != event.unified_msg_origin:
+                                # 构造非UMO消息通知
+                                tartget_msg = (f"🎉 群{group_id} 已由管理员审核通过{user_id}的请求\n"+
+                                                "🏷️ 分类: 人工审核\n")
+                                if chart_path and chart_path.exists():
+                                    wait_chain: list[Comp.BaseMessageComponent] = [
+                                        Comp.Plain(tartget_msg),
+                                        Comp.Image.fromFileSystem(str(chart_path))
+                                    ]
+                                else:
+                                    wait_chain: list[Comp.BaseMessageComponent] = [
+                                        Comp.Plain(tartget_msg)
+                                    ]
+                            await self.context.send_message(target_sid, MessageChain(wait_chain)) #type: ignore
+                            logger.info(f"[JoinManager] 检测到手动同意入群，消息发送到{target_sid}成功")
+                        except Exception as e:
+                            logger.error(f"发送消息到{target_sid}失败: {e}")
+                        await asyncio.sleep(delay)
+                finally:
+                    await self._dispose_chart_path(chart_path)
+            else:
+                await self._dispose_chart_path(chart_path)
 
     @filter.command("入群统计",alias={"加群统计"})
     async def on_statistics_command(self, event: AstrMessageEvent):
@@ -595,13 +752,16 @@ class JoinManager(Star):
             return
 
         # 生成统计图
-        has_chart = False
+        chart_path = None
         try:
-            has_chart = await self._generate_chart(group_id)
+            chart_path = await self._generate_chart(group_id)
         except Exception as e:
             logger.error(f"生成图表失败: {e}")
 
-        if has_chart:
-            yield event.image_result(str(self.chart_temp_path))
-        else:
-            yield event.plain_result("生成图表出错，请重试！")
+        try:
+            if chart_path and chart_path.exists():
+                yield event.image_result(str(chart_path))
+            else:
+                yield event.plain_result("生成图表出错，请重试！")
+        finally:
+            await self._dispose_chart_path(chart_path)
