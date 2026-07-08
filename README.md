@@ -3,7 +3,7 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.6.0💫
+💫加群请求管理器v1.6.1💫
 
 <font color=RED size=4><b>警告：v1.6.0 为破坏性配置更新，旧版 `分类:关键词`、`关键词列表`、`群号:消息` 配置不会自动迁移，请更新后在插件配置页重新配置规则和消息模板。</b></font>
 
@@ -55,6 +55,7 @@ git clone https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git
 | `背景图` | str | 需要放在插件目录的 `assets` 文件夹下，例如 `bg.jpg` |
 | `发送延迟` | float | 多个通知目标之间的发送间隔，单位秒 |
 | `图表兜底清理时间` | int | 统计图发送结束后立即删除；如果发送中断或删除失败，残留图片会在下一次生成图表时按此时间兜底清理，单位秒 |
+| `等级限制` | object | 开启后低于最低 QQ 等级或未获取到等级的加群请求不会进入关键词审核；可选择直接拒绝，并自定义拒绝消息 |
 | `同意关键词规则` | template_list | 每条规则包含 `启用`、`适用群号列表`、`来源分类`、`同意关键词` |
 | `拒绝关键词规则` | template_list | 每条规则包含 `启用`、`适用群号列表`、`拒绝关键词`，拒绝优先级高于同意 |
 | `阻止模式` | option | `blacklist` 为黑名单，`whitelist` 为白名单 |
@@ -108,11 +109,17 @@ git clone https://github.com/WhiteCloudOL/astrbot_plugin_joinmanager.git
 | 占位符 | 代表什么？ | 适用于 |
 |--------|--------| -------- |
 | `%group_id%` | 群号 | all |
+| `%group_name%` | 群名称，获取不到时使用群号 | all |
 | `%user_id%` | 用户ID（QQ号） | all |
 | `%user_name%` | 用户名（QQ昵称） | all |
 | `%key%` | 检测到的关键词 | 拒绝理由 |
 | `%category%` | 检测到的分类 | 欢迎语 |
 | `%comment%` | 用户加群的验证消息 | 欢迎语 |
+| `%user_level%` | 用户 QQ 等级，未获取到时为空 | 等级限制拒绝消息 |
+| `%min_level%` | 配置的最低 QQ 等级 | 等级限制拒绝消息 |
+| `%level_reason%` | 等级限制命中的具体原因 | 等级限制拒绝消息 |
+
+`%group_name%` 通过 `get_group_info` 获取；如果接口不可用或未返回群名称，会自动回退为群号。入群统计图标题同样优先显示群名称。
 
 ## 🎈 数据存储
 1. 网页配置：`_conf_schema.json`

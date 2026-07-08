@@ -13,7 +13,6 @@ from astrbot.api.star import Context, Star, StarTools
 
 from .draw import draw_chart
 
-
 DEFAULT_GROUP_ID = "default"
 
 MESSAGE_DEFAULTS = {
@@ -43,24 +42,55 @@ class JoinManager(Star):
         if not self.chart_cache_dir.exists():
             self.chart_cache_dir.mkdir(parents=True, exist_ok=True)
         if not self.assets_dir.exists():
-            logger.warning(f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}")
+            logger.warning(
+                f"[JoinManager] 未找到 assets 目录，自定义字体可能无法加载: {self.assets_dir}"
+            )
 
         # 3. 数据加载
         self.records = self._load_records()
 
         # 4. 配置加载
-        self.welcome_config = self._load_message_templates("welcome_msg", MESSAGE_DEFAULTS["welcome_msg"])
-        self.decrease_config = self._load_message_templates("decrease_msg", MESSAGE_DEFAULTS["decrease_msg"])
-        self.increase_config = self._load_message_templates("increase_msg", MESSAGE_DEFAULTS["increase_msg"])
-        self.reject_reason = self._load_message_templates("reject_reason", MESSAGE_DEFAULTS["reject_reason"])
+        self.welcome_config = self._load_message_templates(
+            "welcome_msg", MESSAGE_DEFAULTS["welcome_msg"]
+        )
+        self.decrease_config = self._load_message_templates(
+            "decrease_msg", MESSAGE_DEFAULTS["decrease_msg"]
+        )
+        self.increase_config = self._load_message_templates(
+            "increase_msg", MESSAGE_DEFAULTS["increase_msg"]
+        )
+        self.reject_reason = self._load_message_templates(
+            "reject_reason", MESSAGE_DEFAULTS["reject_reason"]
+        )
 
         self.accept_rules, self.accept_rule_groups = self._load_accept_rules()
         self.reject_rules, self.reject_rule_groups = self._load_reject_rules()
+        self.seen_group_request_flags: set[str] = set()
+        self.group_name_cache: dict[str, str] = {}
+        level_limit = self.config.get("level_limit", {})
+        if not isinstance(level_limit, dict):
+            level_limit = {}
+        self.level_limit_enabled = bool(level_limit.get("enabled", False))
+        try:
+            self.min_level = int(level_limit.get("min_level", 0))
+        except (TypeError, ValueError):
+            self.min_level = 0
+        self.reject_low_level = bool(level_limit.get("reject_low_level", False))
+        self.level_limit_reject_reason = str(
+            level_limit.get(
+                "reject_reason",
+                "您的 QQ 等级过低，未通过本群自动审核。",
+            )
+        )
 
     @staticmethod
     def _normalize_group_id(value: Any) -> str:
         group_id = str(value or "").strip()
-        if not group_id or group_id == "默认" or group_id.lower() in {DEFAULT_GROUP_ID, "*"}:
+        if (
+            not group_id
+            or group_id == "默认"
+            or group_id.lower() in {DEFAULT_GROUP_ID, "*"}
+        ):
             return DEFAULT_GROUP_ID
         return group_id
 
@@ -72,7 +102,9 @@ class JoinManager(Star):
             raw_keywords = value
         else:
             return []
-        return [str(keyword).strip() for keyword in raw_keywords if str(keyword).strip()]
+        return [
+            str(keyword).strip() for keyword in raw_keywords if str(keyword).strip()
+        ]
 
     def _group_ids_from_rule(self, item: dict[str, Any]) -> list[str]:
         raw_group_ids = item.get("group_ids")
@@ -90,7 +122,9 @@ class JoinManager(Star):
 
         return group_ids or [DEFAULT_GROUP_ID]
 
-    def _load_message_templates(self, config_key: str, default_text: str) -> dict[str, str]:
+    def _load_message_templates(
+        self, config_key: str, default_text: str
+    ) -> dict[str, str]:
         raw_list = self.config.get("message_templates", {}).get(config_key, [])
         result: dict[str, str] = {}
         for item in raw_list:
@@ -180,13 +214,14 @@ class JoinManager(Star):
                 logger.error(f"加载入群记录失败: {e}")
         return {}
 
-    def get_notice_session(self,
-                         event: AstrMessageEvent,
-                         type: str # reject_notice / accept_notice / decrease_notice / increase_notice
-                         ) -> set[str]:
+    def get_notice_session(
+        self,
+        event: AstrMessageEvent,
+        type: str,  # reject_notice / accept_notice / decrease_notice / increase_notice
+    ) -> set[str]:
         """获取需要通知的会话ID"""
         umo = event.unified_msg_origin
-        sessions = self.config.get("notice",{}).get(type,[])
+        sessions = self.config.get("notice", {}).get(type, [])
         filtered_sessions = {item for item in sessions if item != "origin"}
         if "origin" in sessions:
             filtered_sessions.add(umo)
@@ -224,9 +259,14 @@ class JoinManager(Star):
         return max(seconds, 1)
 
     def _build_chart_cache_path(self, group_id: str) -> Path:
-        safe_group_id = "".join(char for char in group_id if char.isdigit()) or "unknown"
+        safe_group_id = (
+            "".join(char for char in group_id if char.isdigit()) or "unknown"
+        )
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        return self.chart_cache_dir / f"joinmanager_{safe_group_id}_{timestamp}_{uuid4().hex[:8]}.png"
+        return (
+            self.chart_cache_dir
+            / f"joinmanager_{safe_group_id}_{timestamp}_{uuid4().hex[:8]}.png"
+        )
 
     def _cleanup_chart_cache_sync(self, active_paths: set[Path]):
         cleanup_seconds = self._get_chart_cleanup_seconds()
@@ -242,7 +282,9 @@ class JoinManager(Star):
                     if chart_path.suffix == ".deleting":
                         chart_path.unlink()
                     else:
-                        deleting_path = chart_path.with_suffix(f"{chart_path.suffix}.deleting")
+                        deleting_path = chart_path.with_suffix(
+                            f"{chart_path.suffix}.deleting"
+                        )
                         chart_path.rename(deleting_path)
                         deleting_path.unlink()
             except FileNotFoundError:
@@ -278,7 +320,7 @@ class JoinManager(Star):
         self._release_chart_path(chart_path)
         await asyncio.to_thread(self._delete_chart_path_sync, chart_path)
 
-    async def _generate_chart(self, group_id: str) -> Path | None:
+    async def _generate_chart(self, group_id: str, group_name: str = "") -> Path | None:
         """异步绘图包装器"""
         if group_id not in self.records:
             return None
@@ -298,7 +340,8 @@ class JoinManager(Star):
                 chart_path,
                 self.assets_dir,
                 font_name,
-                bg_img
+                bg_img,
+                group_name or group_id,
             )
         except Exception:
             await self._dispose_chart_path(chart_path)
@@ -308,30 +351,241 @@ class JoinManager(Star):
         await self._dispose_chart_path(chart_path)
         return None
 
-    async def _get_user_nickname(self, event: AstrMessageEvent, user_id: str) -> str:
-        """获取昵称"""
+    async def _get_stranger_info(
+        self, event: AstrMessageEvent, user_id: str
+    ) -> dict[str, Any]:
+        """Get stranger profile information through the OneBot client.
+
+        Args:
+            event: Current AstrBot message event.
+            user_id: QQ user ID to query.
+
+        Returns:
+            A normalized user info dict. Fields unavailable from the adapter are
+            returned as empty strings.
+        """
+        info: dict[str, Any] = {
+            "user_id": str(user_id),
+            "nickname": "",
+            "nick": "",
+            "sex": "",
+            "age": "",
+            "level": "",
+            "qq_level": "",
+            "qid": "",
+            "login_days": "",
+            "reg_time": "",
+            "long_nick": "",
+            "country": "",
+            "province": "",
+            "city": "",
+            "profile_available": False,
+            "level_available": False,
+        }
+
         from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
             AiocqhttpMessageEvent,
         )
+
         if not isinstance(event, AiocqhttpMessageEvent):
-            return ""
+            logger.debug("[JoinManager] 跳过获取陌生人信息：当前事件不是aiocqhttp事件")
+            return info
 
         client = event.bot
         try:
-            if client:
-                resp = await client.call_action("get_stranger_info", user_id=int(user_id), no_cache=True)
-                if resp and isinstance(resp, dict):
-                    nick = resp.get("nick")
-                    if not nick:
-                        nick = resp.get("data", {}).get("nick", "")
-                    return str(nick) if nick else ""
+            if not client:
+                logger.warning("[JoinManager] 获取陌生人信息失败：bot client 不可用")
+                return info
+
+            logger.debug(f"[JoinManager] 调用get_stranger_info: user_id={user_id}")
+            resp = await client.call_action("get_stranger_info", user_id=int(user_id))
+            if not resp or not isinstance(resp, dict):
+                logger.warning(
+                    f"[JoinManager] 获取陌生人信息失败：接口返回为空或类型异常，用户 {user_id}"
+                )
+                return info
+
+            data = resp.get("data")
+            if not isinstance(data, dict):
+                data = resp
+            logger.debug(
+                "[JoinManager] get_stranger_info返回字段: "
+                f"top={list(resp.keys())}, data={list(data.keys())}"
+            )
+
+            aliases = {
+                "user_id": ("user_id", "qq", "uin"),
+                "nickname": ("nickname", "nick", "name"),
+                "nick": ("nick", "nickname", "name"),
+                "sex": ("sex", "gender"),
+                "age": ("age",),
+                "qid": ("qid",),
+                "login_days": ("login_days", "loginDays"),
+                "reg_time": ("reg_time", "regTime", "register_time"),
+                "long_nick": ("long_nick", "longNick", "long_nickname"),
+                "country": ("country",),
+                "province": ("province",),
+                "city": ("city",),
+            }
+            for target_key, source_keys in aliases.items():
+                for source_key in source_keys:
+                    value = data.get(source_key)
+                    if value not in (None, ""):
+                        info[target_key] = value
+                        info["profile_available"] = True
+                        break
+
+            level = ""
+            for source_key in ("level", "qq_level", "qqLevel", "qlevel"):
+                value = data.get(source_key)
+                if value in (None, ""):
+                    continue
+                try:
+                    level = int(value)
+                except (TypeError, ValueError):
+                    level = value
+                break
+            info["level"] = level
+            info["qq_level"] = level
+            info["level_available"] = level != ""
+            if info["level_available"]:
+                logger.debug(
+                    f"[JoinManager] 成功获取用户等级: user_id={user_id}, level={level}"
+                )
+            elif self.level_limit_enabled:
+                logger.warning(
+                    f"[JoinManager] get_stranger_info未返回等级字段，用户 {user_id}"
+                )
+            else:
+                logger.debug(
+                    f"[JoinManager] get_stranger_info未返回等级字段，用户 {user_id}"
+                )
         except Exception as e:
             logger.error(f"[JoinManager] 获取用户信息API出错: {e}")
-        return ""
+        return info
+
+    async def _get_group_info(
+        self, event: AstrMessageEvent, group_id: str
+    ) -> dict[str, Any]:
+        """Get group information through the OneBot client.
+
+        Args:
+            event: Current AstrBot message event.
+            group_id: QQ group ID to query.
+
+        Returns:
+            A normalized group info dict. Fields unavailable from the adapter are
+            returned as empty strings.
+        """
+        info: dict[str, Any] = {
+            "group_id": str(group_id),
+            "group_name": "",
+            "member_count": "",
+            "max_member_count": "",
+            "group_create_time": "",
+            "group_level": "",
+            "group_memo": "",
+            "group_info_available": False,
+        }
+
+        from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
+            AiocqhttpMessageEvent,
+        )
+
+        if not isinstance(event, AiocqhttpMessageEvent):
+            logger.debug("[JoinManager] 跳过获取群信息：当前事件不是aiocqhttp事件")
+            return info
+
+        client = event.bot
+        try:
+            if not client:
+                logger.warning("[JoinManager] 获取群信息失败：bot client 不可用")
+                return info
+
+            logger.debug(f"[JoinManager] 调用get_group_info: group_id={group_id}")
+            resp = await client.call_action("get_group_info", group_id=int(group_id))
+            if not resp or not isinstance(resp, dict):
+                logger.warning(
+                    f"[JoinManager] 获取群信息失败：接口返回为空或类型异常，群 {group_id}"
+                )
+                return info
+
+            data = resp.get("data")
+            if not isinstance(data, dict):
+                data = resp
+            logger.debug(
+                "[JoinManager] get_group_info返回字段: "
+                f"top={list(resp.keys())}, data={list(data.keys())}"
+            )
+
+            aliases = {
+                "group_id": ("group_id", "groupId"),
+                "group_name": ("group_name", "groupName", "name"),
+                "member_count": ("member_count", "memberCount"),
+                "max_member_count": ("max_member_count", "maxMemberCount"),
+                "group_create_time": ("group_create_time", "groupCreateTime"),
+                "group_level": ("group_level", "groupLevel"),
+                "group_memo": ("group_memo", "groupMemo", "memo"),
+            }
+            for target_key, source_keys in aliases.items():
+                for source_key in source_keys:
+                    value = data.get(source_key)
+                    if value not in (None, ""):
+                        info[target_key] = value
+                        info["group_info_available"] = True
+                        break
+        except Exception as e:
+            logger.warning(f"[JoinManager] 获取群信息API出错: {e}")
+        return info
+
+    async def _get_group_name(self, event: AstrMessageEvent, group_id: str) -> str:
+        """Get group name.
+
+        Args:
+            event: Current AstrBot message event.
+            group_id: QQ group ID to query.
+
+        Returns:
+            Group name when available, otherwise the group ID.
+        """
+        if group_id in self.group_name_cache:
+            return self.group_name_cache[group_id]
+
+        info = await self._get_group_info(event, group_id)
+        group_name = str(info.get("group_name") or "").strip()
+        if group_name:
+            self.group_name_cache[group_id] = group_name
+            logger.debug(f"[JoinManager] 成功获取群名称: {group_name} ({group_id})")
+            return group_name
+
+        logger.debug(f"[JoinManager] 未获取到群名称，使用群号兜底: {group_id}")
+        return group_id
+
+    async def _get_user_nickname(self, event: AstrMessageEvent, user_id: str) -> str:
+        """Get user nickname.
+
+        Args:
+            event: Current AstrBot message event.
+            user_id: QQ user ID to query.
+
+        Returns:
+            User nickname when available, otherwise an empty string.
+        """
+        info = await self._get_stranger_info(event, user_id)
+        nick = info.get("nickname") or info.get("nick")
+        return str(nick) if nick else ""
 
     # ------------------ 占位符处理逻辑 ------------------
 
-    def _format_placeholder(self, text: str, group_id: str, user_id: str, user_name: str = "" , extra: dict[str, str] | None = None ) -> str:
+    def _format_placeholder(
+        self,
+        text: str,
+        group_id: str,
+        user_id: str,
+        user_name: str = "",
+        group_name: str = "",
+        extra: dict[str, str] | None = None,
+    ) -> str:
         """
         统一的占位符替换方法
         支持: %group_id%, %user_id%, %user_name%
@@ -342,6 +596,7 @@ class JoinManager(Star):
 
         mapping = {
             r"%group_id%": str(group_id),
+            r"%group_name%": str(group_name or group_id),
             r"%user_id%": str(user_id),
             r"%user_name%": str(user_name),
         }
@@ -356,21 +611,29 @@ class JoinManager(Star):
     def get_welcome_msg(self, group_id: str) -> str:
         """获取原始欢迎语模版"""
         group_id = self._normalize_group_id(group_id)
-        default = self.welcome_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["welcome_msg"])
+        default = self.welcome_config.get(
+            DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["welcome_msg"]
+        )
         return self.welcome_config.get(group_id, default)
 
     def get_decrease_msg(self, group_id: str) -> str:
         """获取原始退群语模版"""
         group_id = self._normalize_group_id(group_id)
-        default = self.decrease_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["decrease_msg"])
+        default = self.decrease_config.get(
+            DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["decrease_msg"]
+        )
         return self.decrease_config.get(group_id, default)
 
     def get_increase_msg(self, group_id: str) -> str:
         group_id = self._normalize_group_id(group_id)
-        default = self.increase_config.get(DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["increase_msg"])
+        default = self.increase_config.get(
+            DEFAULT_GROUP_ID, MESSAGE_DEFAULTS["increase_msg"]
+        )
         return self.increase_config.get(group_id, default)
 
-    def get_reject_reason(self, event: AstrMessageEvent, matched_key: str) -> str:
+    def get_reject_reason(
+        self, event: AstrMessageEvent, matched_key: str, group_name: str = ""
+    ) -> str:
         group_id = self._normalize_group_id(event.get_group_id())
         user_id = event.get_sender_id()
         user_name = event.get_sender_name()
@@ -386,7 +649,8 @@ class JoinManager(Star):
             group_id,
             user_id,
             user_name,
-            extra={r"%key%": matched_key}
+            group_name,
+            extra={r"%key%": matched_key},
         )
 
     # ------------------ 事件处理 ------------------
@@ -394,35 +658,151 @@ class JoinManager(Star):
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_request(self, event: AstrMessageEvent):
         """监听加群事件并处理"""
-        if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
+        if not hasattr(event, "message_obj") or not hasattr(
+            event.message_obj, "raw_message"
+        ):
             return
 
         raw = event.message_obj.raw_message
         if not isinstance(raw, dict):
             return
 
-        if raw.get("post_type") != "request" or raw.get("request_type") != "group" or raw.get("sub_type") != "add":
+        if (
+            raw.get("post_type") != "request"
+            or raw.get("request_type") != "group"
+            or raw.get("sub_type") != "add"
+        ):
             return
 
-        delay = self.config.get("delay",0.5)
+        delay = self.config.get("delay", 0.5)
         group_id = str(raw.get("group_id", ""))
         user_id = str(raw.get("user_id", ""))
         comment = raw.get("comment", "")
-        flag = raw.get("flag", "")
-        logger.info(f"[JoinManager] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}")
+        flag = str(raw.get("flag", ""))
+        logger.info(
+            f"[JoinManager] 收到申请 | Group: {group_id} | User: {user_id} | Msg: {comment}"
+        )
 
         if not self._check_permission(group_id):
             return
+        if flag:
+            if flag in self.seen_group_request_flags:
+                logger.info(
+                    f"[JoinManager] 跳过重复加群请求事件: Group={group_id}, User={user_id}"
+                )
+                return
+            self.seen_group_request_flags.add(flag)
+            if len(self.seen_group_request_flags) > 1000:
+                self.seen_group_request_flags.clear()
+                self.seen_group_request_flags.add(flag)
 
+        group_name = await self._get_group_name(event, group_id)
         comment_lower = comment.lower()
         user_name = user_id
+        stranger_info: dict[str, Any] = {}
 
-        # 获取昵称
+        # Fetch profile once for nickname and optional level gate.
         if event.get_platform_name() == "aiocqhttp":
-            fetched_name = await self._get_user_nickname(event, user_id)
+            stranger_info = await self._get_stranger_info(event, user_id)
+            fetched_name = stranger_info.get("nickname") or stranger_info.get("nick")
             if fetched_name:
-                user_name = fetched_name
+                user_name = str(fetched_name)
                 logger.info(f"[JoinManager] 成功获取昵称: {user_name} ({user_id})")
+            else:
+                logger.debug(f"[JoinManager] 未获取到用户昵称: {user_id}")
+
+        if self.level_limit_enabled:
+            logger.debug(
+                "[JoinManager] 等级限制已启用: "
+                f"min_level={self.min_level}, reject_low_level={self.reject_low_level}"
+            )
+            raw_level = stranger_info.get("level", "")
+            user_level = None
+            if isinstance(raw_level, int):
+                user_level = raw_level
+            elif isinstance(raw_level, str) and raw_level.isdigit():
+                user_level = int(raw_level)
+            elif raw_level:
+                logger.warning(
+                    f"[JoinManager] 用户等级字段不可解析: user_id={user_id}, level={raw_level}"
+                )
+
+            if user_level is None or user_level < self.min_level:
+                if user_level is None:
+                    if stranger_info.get("profile_available"):
+                        level_reason = f"接口未返回QQ等级，最低要求{self.min_level}级"
+                    else:
+                        level_reason = (
+                            f"未获取到用户资料或QQ等级，最低要求{self.min_level}级"
+                        )
+                else:
+                    level_reason = f"QQ等级{user_level}级低于最低要求{self.min_level}级"
+                logger.info(
+                    f"[JoinManager] 等级限制拦截用户: {user_id} | {level_reason}"
+                )
+                reject_message = self._format_placeholder(
+                    self.level_limit_reject_reason,
+                    group_id,
+                    user_id,
+                    user_name,
+                    group_name,
+                    extra={
+                        r"%user_level%": str(user_level)
+                        if user_level is not None
+                        else "",
+                        r"%min_level%": str(self.min_level),
+                        r"%level_reason%": level_reason,
+                    },
+                )
+
+                if self.reject_low_level and event.get_platform_name() == "aiocqhttp":
+                    from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
+                        AiocqhttpMessageEvent,
+                    )
+
+                    assert isinstance(event, AiocqhttpMessageEvent)
+                    client = event.bot
+                    try:
+                        await client.call_action(
+                            "set_group_add_request",
+                            flag=flag,
+                            approve=False,
+                            reason=reject_message,
+                        )
+                        logger.info(
+                            f"[JoinManager] 已按等级限制直接拒绝用户: {user_id}"
+                        )
+                        target_sids = self.get_notice_session(event, "reject_notice")
+                        if target_sids is not None:
+                            chain: list[Comp.BaseMessageComponent] = [
+                                Comp.Plain(
+                                    f"🚫 已自动拒绝用户 {user_id}\n"
+                                    f"📝 原因: {reject_message}"
+                                )
+                            ]
+                            for target_sid in target_sids:
+                                try:
+                                    await self.context.send_message(
+                                        target_sid, MessageChain(chain)
+                                    )  # type: ignore
+                                except Exception as e:
+                                    logger.error(f"发送消息到{target_sid}失败: {e}")
+                                await asyncio.sleep(delay)
+                    except Exception as e:
+                        error_text = str(e)
+                        if "already refuse msg by self" in error_text:
+                            logger.info(
+                                "[JoinManager] 等级限制拒绝请求已由本账号处理，"
+                                f"跳过重复拒绝: {user_id}"
+                            )
+                            return
+                        logger.warning(f"[JoinManager] 等级限制拒绝请求失败: {e}")
+                else:
+                    logger.info(f"[JoinManager] 等级限制已跳过处理用户请求: {user_id}")
+                return
+            logger.info(
+                f"[JoinManager] 用户等级通过限制: user_id={user_id}, level={user_level}"
+            )
 
         # ---------------- 关键词匹配 (自动拒绝) ----------------
         reject_keywords = self.get_reject_keywords(group_id)
@@ -434,27 +814,40 @@ class JoinManager(Star):
                 break
 
         if matched_reject_kw:
-            logger.info(f"[JoinManager] 命中拒绝词: {matched_reject_kw} -> 拒绝用户: {user_id}")
+            logger.info(
+                f"[JoinManager] 命中拒绝词: {matched_reject_kw} -> 拒绝用户: {user_id}"
+            )
             # 拒绝理由
-            reject_reason = self.get_reject_reason(event,matched_reject_kw)
+            reject_reason = self.get_reject_reason(event, matched_reject_kw, group_name)
             if event.get_platform_name() == "aiocqhttp":
                 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
                     AiocqhttpMessageEvent,
                 )
+
                 assert isinstance(event, AiocqhttpMessageEvent)
                 client = event.bot
                 try:
-                    await client.call_action("set_group_add_request", flag=flag, approve=False, reason=reject_reason)
-                    target_sids = self.get_notice_session(event,"reject_notice")
+                    await client.call_action(
+                        "set_group_add_request",
+                        flag=flag,
+                        approve=False,
+                        reason=reject_reason,
+                    )
+                    target_sids = self.get_notice_session(event, "reject_notice")
 
                     if target_sids is not None:
                         # 逐群发送
                         chain: list[Comp.BaseMessageComponent] = [
-                                Comp.Plain(f"🚫 已自动拒绝用户 {user_id}\n"+
-                                        f"📝 原因: 触发拒绝词【{matched_reject_kw}】")]
+                            Comp.Plain(
+                                f"🚫 已自动拒绝用户 {user_id}\n"
+                                + f"📝 原因: 触发拒绝词【{matched_reject_kw}】"
+                            )
+                        ]
                         for target_sid in target_sids:
                             try:
-                                await self.context.send_message(target_sid, MessageChain(chain)) #type: ignore
+                                await self.context.send_message(
+                                    target_sid, MessageChain(chain)
+                                )  # type: ignore
                             except Exception as e:
                                 logger.error(f"发送消息到{target_sid}失败: {e}")
                             await asyncio.sleep(delay)
@@ -484,10 +877,13 @@ class JoinManager(Star):
                 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
                     AiocqhttpMessageEvent,
                 )
+
                 assert isinstance(event, AiocqhttpMessageEvent)
                 client = event.bot
                 try:
-                    await client.call_action("set_group_add_request", flag=flag, approve=True)
+                    await client.call_action(
+                        "set_group_add_request", flag=flag, approve=True
+                    )
                     approved_success = True
                 except Exception as e:
                     logger.error(f"API调用失败: {e}")
@@ -502,17 +898,19 @@ class JoinManager(Star):
                 self.records[group_id][user_id] = {
                     "accept_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "accept_reason": f"匹配关键词: {matched_keyword}",
-                    "category": matched_category
+                    "category": matched_category,
                 }
                 self._save_records()
 
                 chart_path = None
-                disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
+                disabled_statisics_group = self.config.get("divide_group", {}).get(
+                    "disabled_statistics", []
+                )
                 disabled_list_str = [str(g) for g in disabled_statisics_group]
 
                 if group_id not in disabled_list_str:
                     try:
-                        chart_path = await self._generate_chart(group_id)
+                        chart_path = await self._generate_chart(group_id, group_name)
                     except Exception as e:
                         logger.error(f"生成图表失败: {e}")
 
@@ -523,31 +921,33 @@ class JoinManager(Star):
                     group_id,
                     user_id,
                     user_name,
-                    extra={ r"%category%": matched_category,
-                           r"%comment%": comment }
+                    group_name,
+                    extra={r"%category%": matched_category, r"%comment%": comment},
                 )
 
-                sdmsg = (f" 🎉 {welcome_msg}\n"+
-                         f"📝 验证消息:\n{comment}\n"+
-                         f"🏷️ 分类: {matched_category}\n")
+                sdmsg = (
+                    f" 🎉 {welcome_msg}\n"
+                    + f"📝 验证消息:\n{comment}\n"
+                    + f"🏷️ 分类: {matched_category}\n"
+                )
 
                 if chart_path and chart_path.exists():
                     sdmsg += "\n📊 来源分布:"
                     chain: list[Comp.BaseMessageComponent] = [
                         Comp.At(qq=user_id),
                         Comp.Plain(sdmsg),
-                        Comp.Image.fromFileSystem(str(chart_path))
+                        Comp.Image.fromFileSystem(str(chart_path)),
                     ]
                 else:
                     chain: list[Comp.BaseMessageComponent] = [
                         Comp.At(qq=user_id),
-                        Comp.Plain(sdmsg)
+                        Comp.Plain(sdmsg),
                     ]
 
                 await asyncio.sleep(2)
 
                 try:
-                    target_sids = self.get_notice_session(event,"accept_notice")
+                    target_sids = self.get_notice_session(event, "accept_notice")
                     if target_sids is not None:
                         # 逐群发送
                         for target_sid in target_sids:
@@ -555,20 +955,26 @@ class JoinManager(Star):
                             try:
                                 if target_sid != event.unified_msg_origin:
                                     # 构造非UMO消息通知
-                                    tartget_msg = (f"🎉 群{group_id} 已自动审核通过{user_id}的请求\n"+
-                                                   f"📝 验证消息:\n{comment}\n"+
-                                                   f"🏷️ 分类: {matched_category}\n")
+                                    tartget_msg = (
+                                        f"🎉 群{group_id} 已自动审核通过{user_id}的请求\n"
+                                        + f"📝 验证消息:\n{comment}\n"
+                                        + f"🏷️ 分类: {matched_category}\n"
+                                    )
                                     if chart_path and chart_path.exists():
                                         wait_chain: list[Comp.BaseMessageComponent] = [
                                             Comp.Plain(tartget_msg),
-                                            Comp.Image.fromFileSystem(str(chart_path))
+                                            Comp.Image.fromFileSystem(str(chart_path)),
                                         ]
                                     else:
                                         wait_chain: list[Comp.BaseMessageComponent] = [
                                             Comp.Plain(tartget_msg)
                                         ]
-                                await self.context.send_message(target_sid, MessageChain(wait_chain)) #type: ignore
-                                logger.info(f"[JoinManager] 已完成加群请求，消息发送到{target_sid}成功")
+                                await self.context.send_message(
+                                    target_sid, MessageChain(wait_chain)
+                                )  # type: ignore
+                                logger.info(
+                                    f"[JoinManager] 已完成加群请求，消息发送到{target_sid}成功"
+                                )
                             except Exception as e:
                                 logger.error(f"发送消息到{target_sid}失败: {e}")
                             await asyncio.sleep(delay)
@@ -583,29 +989,35 @@ class JoinManager(Star):
         if event.get_platform_name() != "aiocqhttp":
             return
 
-        if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
+        if not hasattr(event, "message_obj") or not hasattr(
+            event.message_obj, "raw_message"
+        ):
             return
 
         raw = event.message_obj.raw_message
         if not isinstance(raw, dict):
             return
 
-        if raw.get("post_type") == "notice" and raw.get("notice_type") == "group_decrease":
+        if (
+            raw.get("post_type") == "notice"
+            and raw.get("notice_type") == "group_decrease"
+        ):
             group_id = str(raw.get("group_id", ""))
             user_id = str(raw.get("user_id", ""))
 
             # 权限检查
             if not self._check_permission(group_id):
                 return
-
+            group_name = await self._get_group_name(event, group_id)
 
             # 从数据中移除
             if group_id in self.records:
                 if user_id in self.records[group_id]:
                     self.records[group_id].pop(user_id)
-                    logger.info(f"[JoinManager] 用户 {user_id} 退出群 {group_id}，已从统计记录中移除")
+                    logger.info(
+                        f"[JoinManager] 用户 {user_id} 退出群 {group_id}，已从统计记录中移除"
+                    )
                     self._save_records()
-
 
             user_name = user_id
             fetched_name = await self._get_user_nickname(event, user_id)
@@ -616,19 +1028,24 @@ class JoinManager(Star):
             if not decrease_tmpl:
                 return
 
-            final_msg = self._format_placeholder(decrease_tmpl, group_id, user_id, user_name)
+            final_msg = self._format_placeholder(
+                decrease_tmpl, group_id, user_id, user_name, group_name
+            )
             target_sids = self.get_notice_session(event, "decrease_notice")
 
             if target_sids:
                 delay = self.config.get("delay", 0.5)
                 for target_sid in target_sids:
                     try:
-                        await self.context.send_message(target_sid, MessageChain([Comp.Plain(final_msg)])) #type: ignore
+                        await self.context.send_message(
+                            target_sid, MessageChain([Comp.Plain(final_msg)])
+                        )  # type: ignore
                         logger.info(f"[JoinManager] 已发送退群提示到 {target_sid}")
                     except Exception as e:
-                        logger.error(f"[JoinManager] 发送退群提示到 {target_sid} 失败: {e}")
+                        logger.error(
+                            f"[JoinManager] 发送退群提示到 {target_sid} 失败: {e}"
+                        )
                     await asyncio.sleep(delay)
-
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_group_increase(self, event: AstrMessageEvent):
@@ -636,14 +1053,19 @@ class JoinManager(Star):
         if event.get_platform_name() != "aiocqhttp":
             return
 
-        if not hasattr(event, "message_obj") or not hasattr(event.message_obj, "raw_message"):
+        if not hasattr(event, "message_obj") or not hasattr(
+            event.message_obj, "raw_message"
+        ):
             return
 
         raw = event.message_obj.raw_message
         if not isinstance(raw, dict):
             return
 
-        if raw.get("post_type") == "notice" and raw.get("notice_type") == "group_increase":
+        if (
+            raw.get("post_type") == "notice"
+            and raw.get("notice_type") == "group_increase"
+        ):
             group_id = str(raw.get("group_id", ""))
             user_id = str(raw.get("user_id", ""))
 
@@ -651,6 +1073,7 @@ class JoinManager(Star):
             # 权限检查
             if not self._check_permission(group_id):
                 return
+            group_name = await self._get_group_name(event, group_id)
 
             if group_id not in self.records:
                 self.records[group_id] = {}
@@ -663,7 +1086,7 @@ class JoinManager(Star):
             self.records[group_id][user_id] = {
                 "accept_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "accept_reason": "人工审核",
-                "category": "人工审核"
+                "category": "人工审核",
             }
             self._save_records()
 
@@ -672,15 +1095,16 @@ class JoinManager(Star):
                 return
 
             chart_path = None
-            disabled_statisics_group = self.config.get("divide_group", {}).get("disabled_statistics", [])
+            disabled_statisics_group = self.config.get("divide_group", {}).get(
+                "disabled_statistics", []
+            )
             disabled_list_str = [str(g) for g in disabled_statisics_group]
 
             if group_id not in disabled_list_str:
                 try:
-                    chart_path = await self._generate_chart(group_id)
+                    chart_path = await self._generate_chart(group_id, group_name)
                 except Exception as e:
                     logger.error(f"生成图表失败: {e}")
-
 
             # 构造欢迎消息
             user_name = user_id
@@ -688,22 +1112,26 @@ class JoinManager(Star):
             if fetched_name:
                 user_name = fetched_name
 
-            welcome_msg = self._format_placeholder(text=inscrease_tmpl, group_id=group_id, user_id=user_id, user_name=user_name)
-            sdmsg = (f" 🎉 {welcome_msg}\n"+
-                    "🏷️ 分类: 人工审核")
+            welcome_msg = self._format_placeholder(
+                text=inscrease_tmpl,
+                group_id=group_id,
+                user_id=user_id,
+                user_name=user_name,
+                group_name=group_name,
+            )
+            sdmsg = f" 🎉 {welcome_msg}\n" + "🏷️ 分类: 人工审核"
             if chart_path and chart_path.exists():
                 sdmsg += "\n\n📊 来源分布:"
                 chain: list[Comp.BaseMessageComponent] = [
                     Comp.At(qq=user_id),
                     Comp.Plain(sdmsg),
-                    Comp.Image.fromFileSystem(str(chart_path))
+                    Comp.Image.fromFileSystem(str(chart_path)),
                 ]
             else:
                 chain: list[Comp.BaseMessageComponent] = [
                     Comp.At(qq=user_id),
-                    Comp.Plain(sdmsg)
+                    Comp.Plain(sdmsg),
                 ]
-
 
             target_sids = self.get_notice_session(event, "increase_notice")
             delay = self.config.get("delay", 0.5)
@@ -716,19 +1144,25 @@ class JoinManager(Star):
                         try:
                             if target_sid != event.unified_msg_origin:
                                 # 构造非UMO消息通知
-                                tartget_msg = (f"🎉 群{group_id} 已由管理员审核通过{user_id}的请求\n"+
-                                                "🏷️ 分类: 人工审核\n")
+                                tartget_msg = (
+                                    f"🎉 群{group_id} 已由管理员审核通过{user_id}的请求\n"
+                                    + "🏷️ 分类: 人工审核\n"
+                                )
                                 if chart_path and chart_path.exists():
                                     wait_chain: list[Comp.BaseMessageComponent] = [
                                         Comp.Plain(tartget_msg),
-                                        Comp.Image.fromFileSystem(str(chart_path))
+                                        Comp.Image.fromFileSystem(str(chart_path)),
                                     ]
                                 else:
                                     wait_chain: list[Comp.BaseMessageComponent] = [
                                         Comp.Plain(tartget_msg)
                                     ]
-                            await self.context.send_message(target_sid, MessageChain(wait_chain)) #type: ignore
-                            logger.info(f"[JoinManager] 检测到手动同意入群，消息发送到{target_sid}成功")
+                            await self.context.send_message(
+                                target_sid, MessageChain(wait_chain)
+                            )  # type: ignore
+                            logger.info(
+                                f"[JoinManager] 检测到手动同意入群，消息发送到{target_sid}成功"
+                            )
                         except Exception as e:
                             logger.error(f"发送消息到{target_sid}失败: {e}")
                         await asyncio.sleep(delay)
@@ -737,7 +1171,7 @@ class JoinManager(Star):
             else:
                 await self._dispose_chart_path(chart_path)
 
-    @filter.command("入群统计",alias={"加群统计"})
+    @filter.command("入群统计", alias={"加群统计"})
     async def on_statistics_command(self, event: AstrMessageEvent):
         """入群统计命令，生成统计图并发送"""
         group_id = event.get_group_id()
@@ -754,7 +1188,8 @@ class JoinManager(Star):
         # 生成统计图
         chart_path = None
         try:
-            chart_path = await self._generate_chart(group_id)
+            group_name = await self._get_group_name(event, group_id)
+            chart_path = await self._generate_chart(group_id, group_name)
         except Exception as e:
             logger.error(f"生成图表失败: {e}")
 

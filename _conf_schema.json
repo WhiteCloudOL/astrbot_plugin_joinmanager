@@ -25,6 +25,38 @@
     "hint": "统计图发送结束后会立即删除；如果发送中断或删除失败，残留图片会在下一次生成图表时按此时间兜底清理，单位秒。",
     "default": 600
   },
+  "level_limit": {
+    "description": "等级限制",
+    "type": "object",
+    "hint": "开启后，低于最低 QQ 等级或未获取到等级的加群请求不会进入关键词审核流程。",
+    "obvious_hint": true,
+    "items": {
+      "enabled": {
+        "description": "启用等级限制",
+        "type": "bool",
+        "hint": "开启后检查申请人的 QQ 等级。",
+        "default": false
+      },
+      "min_level": {
+        "description": "最低等级限制",
+        "type": "int",
+        "hint": "申请人 QQ 等级低于该值时视为不满足等级限制。",
+        "default": 0
+      },
+      "reject_low_level": {
+        "description": "直接拒绝低等级请求",
+        "type": "bool",
+        "hint": "关闭时不处理低等级或未获取到等级的请求；开启时直接拒绝这些请求。",
+        "default": false
+      },
+      "reject_reason": {
+        "description": "等级限制拒绝消息",
+        "type": "string",
+        "hint": "直接拒绝低等级请求时发送给申请人的消息。支持占位符：%group_id%、%group_name%、%user_id%、%user_name%、%user_level%、%min_level%、%level_reason%。",
+        "default": "您的 QQ 等级过低，未通过本群自动审核。"
+      }
+    }
+  },
   "accept_rules": {
     "description": "同意关键词规则",
     "type": "template_list",
