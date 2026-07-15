@@ -3,9 +3,11 @@
 ![count](https://count.getloli.com/@:astrbot_plugin_joinmanager?name=astrbot_plugin_joinmanager&theme=asoul&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto)
 
 # Astrbot Plugin joinmanager
-💫加群请求管理器v1.6.1💫
+💫加群请求管理器v1.6.2💫
 
 <font color=RED size=4><b>警告：v1.6.0 为破坏性配置更新，旧版 `分类:关键词`、`关键词列表`、`群号:消息` 配置不会自动迁移，请更新后在插件配置页重新配置规则和消息模板。</b></font>
+
+> v1.6.2 已兼容 Matplotlib 3.11 的 `PieContainer` 返回结构，避免生成入群统计图时因返回值类型变化而失败。
 
 > 💌 **欢迎提交 Issue / PR！**  
 > 如果你在使用中遇到问题、想到新功能、或希望优化文档与代码，欢迎在仓库发起 **Issue** 或 **Pull Request**，一起把插件做得更好。

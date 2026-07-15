@@ -183,8 +183,9 @@ def draw_chart(
             textprops={"fontsize": 22},
         )
 
+        # PieContainer keeps tuple-style indexing for compatibility but has no len().
         texts = pie_result[1]
-        autotexts = pie_result[2] if len(pie_result) >= 3 else []
+        autotexts = pie_result[2]
 
         # 绘制中心白圆 (甜甜圈的洞)
         centre_circle = mpatches.Circle(
